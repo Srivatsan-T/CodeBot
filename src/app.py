@@ -20,15 +20,15 @@ from utils import load_projects, save_project, get_config_for_project, clone_rep
 
 # Page Config
 st.set_page_config(
-    page_title="Architecture Intelligence",
-    page_icon="🧠",
+    page_title="CodeBot",
+    page_icon="�",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # Initialize Session State
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = {}  # Dict mapping project_name -> list of messages
 if "config" not in st.session_state:
     st.session_state.config = None
 if "active_project" not in st.session_state:
@@ -287,17 +287,17 @@ with st.sidebar:
 
 if not st.session_state.active_project:
     # Setup Screen
-    st.title("🧠 Architecture Intelligence")
+    st.title("� CodeBot")
     st.markdown("### 🚀 Create New Project")
     
     with st.form("setup_form"):
         project_name = st.text_input("Project Name", placeholder="e.g., My Web App")
         
         # Tabs for Source Selection
-        tab_local, tab_git = st.tabs(["📁 Local Path", "🌐 Clone from URL"])
+        tab_zip, tab_git = st.tabs(["� Upload ZIP", "🌐 Clone from URL"])
         
-        with tab_local:
-            repo_path_local = st.text_input("Repository Path", placeholder="C:/path/to/your/repo")
+        with tab_zip:
+            uploaded_zip = st.file_uploader("Upload Codebase (ZIP)", type=["zip"], help="Upload your code as a compressed ZIP file.")
             
         with tab_git:
             git_url = st.text_input("Git Repository URL", placeholder="https://github.com/username/repo.git")
@@ -305,17 +305,42 @@ if not st.session_state.active_project:
         submitted = st.form_submit_button("Initialize Project", type="primary")
         
         if submitted:
-            repo_path = repo_path_local
+            repo_path = None
             used_git_url = None
             
+            # Sanitize project name for directory creation
+            safe_name = "".join(c if c.isalnum() else "_" for c in project_name).lower() if project_name else "temp_project"
+            
+            # Handle ZIP Upload
+            if uploaded_zip is not None and not git_url:
+                try:
+                    import zipfile
+                    base_upload_dir = Path("uploaded_repos").absolute()
+                    target_dir = base_upload_dir / safe_name
+                    
+                    with st.spinner(f"Extracting {uploaded_zip.name}..."):
+                        target_dir.mkdir(parents=True, exist_ok=True)
+                        with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
+                            zip_ref.extractall(target_dir)
+                            
+                        # If the zip has a single root folder, we should point the repo path directly to it
+                        extracted_items = list(target_dir.iterdir())
+                        if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                            repo_path = str(extracted_items[0])
+                        else:
+                            repo_path = str(target_dir)
+                            
+                        st.success(f"Successfully extracted to: {repo_path}")
+                except Exception as e:
+                    st.error(f"Extraction failed: {str(e)}")
+                    st.stop()
+            
             # Handle Git Clone
-            if git_url and not repo_path_local:
+            elif git_url and uploaded_zip is None:
                 try:
                     with st.spinner(f"Cloning {git_url}..."):
                         # Clone to a 'cloned_repos' directory
                         base_clone_dir = Path("cloned_repos").absolute()
-                        # Sanitize project name for directory
-                        safe_name = "".join(c if c.isalnum() else "_" for c in project_name).lower()
                         target_dir = base_clone_dir / safe_name
                         
                         cloned_path = clone_repository(git_url, str(target_dir))
@@ -329,7 +354,7 @@ if not st.session_state.active_project:
             if project_name and repo_path and os.path.exists(repo_path):
                 initialize_system(project_name, repo_path, used_git_url)
             else:
-                st.error("Please enter a valid project name and repository path/URL.")
+                st.error("Please enter a valid project name and either upload a ZIP or provide a Git URL.")
 
 else:
     # Authenticated View
@@ -368,72 +393,91 @@ else:
     with tab_chat:
         st.markdown("### 💬 Chat with your Codebase")
         
-        # Display History
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                if msg.get("intent") == "documentation":
-                    st.markdown("### 📄 Generated Documentation")
-                    with st.expander("View Full Documentation", expanded=False):
+        # Isolate messages for the active project
+        active_proj = st.session_state.active_project
+        if active_proj not in st.session_state.messages:
+            st.session_state.messages[active_proj] = []
+            
+        project_messages = st.session_state.messages[active_proj]
+        
+        # Display History inside a fixed-height container that auto-scrolls to bottom
+        messages_container = st.container(height=600, border=False)
+        
+        with messages_container:
+            for msg in project_messages:
+                with st.chat_message(msg["role"]):
+                    if msg.get("intent") == "documentation":
+                        st.markdown("### 📄 Generated Documentation")
+                        with st.expander("View Full Documentation", expanded=False):
+                            st.markdown(msg["content"])
+                        # Generate unique key for history downloads
+                        st.download_button(
+                            label="Download Markdown",
+                            data=msg["content"],
+                            file_name=f"documentation_{int(time.time())}.md",
+                            mime="text/markdown",
+                            key=f"dl_{time.time()}_{hash(msg['content'])}"
+                        )
+                    else:
                         st.markdown(msg["content"])
-                    st.download_button(
-                        label="Download Markdown",
-                        data=msg["content"],
-                        file_name=f"documentation_{int(time.time())}.md",
-                        mime="text/markdown",
-                        key=f"dl_{time.time()}_{msg['content'][:10]}"
-                    )
-                else:
-                    st.markdown(msg["content"])
-                    
-                if "artifacts" in msg:
-                    for artifact in msg["artifacts"]:
-                        if artifact["type"] == "graphviz":
-                            try:
-                                with open(artifact["path"], "r", encoding="utf-8") as f:
-                                    dot_source = f.read()
-                                st.graphviz_chart(dot_source)
-                            except Exception as e:
-                                st.error(f"Failed to render diagram: {e}")
+                        
+                    if "artifacts" in msg:
+                        for artifact in msg["artifacts"]:
+                            if artifact["type"] == "graphviz":
+                                try:
+                                    with open(artifact["path"], "r", encoding="utf-8") as f:
+                                        dot_source = f.read()
+                                    st.graphviz_chart(dot_source)
+                                except Exception as e:
+                                    st.error(f"Failed to render diagram: {e}")
         
         # Input
         if prompt := st.chat_input("Ask about architecture, flows, or code..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-                
-            response_data = process_query(prompt)
             
-            with st.chat_message("assistant"):
-                if response_data.get("intent") == "documentation":
-                    st.markdown("### 📄 Generated Documentation")
-                    with st.expander("View Full Documentation", expanded=True):
-                        st.markdown(response_data["content"])
-                    st.download_button(
-                        label="Download Markdown",
-                        data=response_data["content"],
-                        file_name=f"documentation_{int(time.time())}.md",
-                        mime="text/markdown",
-                        key=f"dl_new_{int(time.time())}"
-                    )
-                else:
-                    st.markdown(response_data["content"])
-                    
-                if response_data["artifacts"]:
-                    for artifact in response_data["artifacts"]:
-                        if artifact["type"] == "graphviz":
-                            try:
-                                with open(artifact["path"], "r", encoding="utf-8") as f:
-                                    dot_source = f.read()
-                                st.graphviz_chart(dot_source)
-                            except Exception as e:
-                                st.error(f"Failed to render diagram: {e}")
+            # Immediately append user message and refresh UI to show it at bottom
+            st.session_state.messages[active_proj].append({"role": "user", "content": prompt})
             
-            st.session_state.messages.append({
+            with messages_container:
+                 with st.chat_message("user"):
+                     st.markdown(prompt)
+                     
+                 # Assistant Response Stream
+                 with st.chat_message("assistant"):
+                     response_data = process_query(prompt)
+                     
+                     if response_data.get("intent") == "documentation":
+                         st.markdown("### 📄 Generated Documentation")
+                         with st.expander("View Full Documentation", expanded=True):
+                             st.markdown(response_data["content"])
+                         st.download_button(
+                             label="Download Markdown",
+                             data=response_data["content"],
+                             file_name=f"documentation_{int(time.time())}.md",
+                             mime="text/markdown",
+                             key=f"dl_new_{int(time.time())}"
+                         )
+                     else:
+                         st.markdown(response_data["content"])
+                         
+                     if response_data["artifacts"]:
+                         for artifact in response_data["artifacts"]:
+                             if artifact["type"] == "graphviz":
+                                 try:
+                                     with open(artifact["path"], "r", encoding="utf-8") as f:
+                                         dot_source = f.read()
+                                     st.graphviz_chart(dot_source)
+                                 except Exception as e:
+                                     st.error(f"Failed to render diagram: {e}")
+            
+            st.session_state.messages[active_proj].append({
                 "role": "assistant",
                 "content": response_data["content"],
                 "artifacts": response_data["artifacts"],
                 "intent": response_data.get("intent")
             })
+            
+            # Rerun so the container re-renders with the exact height and forces autoscroll to new tail
+            st.rerun()
 
     with tab_services:
         st.markdown("### 🔌 Services & Integrations")
