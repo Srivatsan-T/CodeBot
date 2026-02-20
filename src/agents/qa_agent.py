@@ -128,7 +128,8 @@ def qa_agent(
     query: str,
     index,
     metadata,
-    embedding_model_name: str
+    embedding_model_name: str,
+    api_key: str = None
 ) -> str:
     """
     QA agent using LangChain.
@@ -140,12 +141,13 @@ def qa_agent(
         index: Vector store
         metadata: Metadata list
         embedding_model_name: Embedding model name
+        api_key: Optional API key override
         
     Returns:
         Answer to the question
     """
     config = load_config(llm_config_path)
-    llm = create_llm_for_agent(config, "qa")
+    llm = create_llm_for_agent(config, "qa", api_key)
     system_prompt = config["agents"][config["active_models"]["qa"]]["system_prompt"]
     
     agent = QAAgent(

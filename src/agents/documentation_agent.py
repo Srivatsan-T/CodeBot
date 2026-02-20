@@ -127,7 +127,8 @@ def documentation_agent(
     index,
     metadata,
     embedding_model_name: str,
-    markdown_path: str
+    markdown_path: str,
+    api_key: str = None
 ) -> str:
     """
     Documentation agent using LangChain.
@@ -140,12 +141,13 @@ def documentation_agent(
         metadata: Metadata list
         embedding_model_name: Embedding model name
         markdown_path: Path to save documentation
+        api_key: Optional API key override
         
     Returns:
         Generated documentation content
     """
     config = load_config(llm_config_path)
-    llm = create_llm_for_agent(config, "documentation")
+    llm = create_llm_for_agent(config, "documentation", api_key)
     system_prompt = config["agents"][config["active_models"]["documentation"]]["system_prompt"]
     
     doc_agent = DocumentationAgent(

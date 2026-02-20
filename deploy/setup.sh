@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+
+# Redirect output to log file
+exec > >(tee -a /var/log/user-data.log) 2>&1
+
+echo "Starting setup..."
+
+# 1. Update System
+sudo dnf update -y
+
+# 2. Install Git (Already installed to clone this repo, but ensuring update)
+sudo dnf install git -y
+
+# 3. Install Docker
+sudo dnf install docker -y
+sudo service docker start
+sudo systemctl enable docker
+
+# 4. Add ec2-user to docker group
+sudo usermod -a -G docker ec2-user
+
+# 5. Install Docker Compose (plugin)
+sudo dnf install docker-compose-plugin -y
+
+# 6. Setup Swap (Optional but recommended for t2.micro/small instances)
+if [ ! -f /swapfile ]; then
+    echo "Setting up 2G swap file..."
+    sudo dd if=/dev/zero of=/swapfile bs=128M count=16
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo "/swapfile swap swap defaults 0 0" | sudo tee -a /etc/fstab
+fi
+
+echo "Setup complete! Please logout and log back in to apply group changes."

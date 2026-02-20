@@ -59,10 +59,15 @@ def initialize_system(project_name, repo_path):
         
         # 3. Load Module Summaries
         status_container.write("📑 Loading module summaries...")
+        
+        # Get API Key from session state or env (handled in utils)
+        api_key = st.session_state.get("api_key")
+        
         module_summaries = load_or_build_module_summaries(
             config.llm_config_path,
             metadata_list,
-            config.module_summary_path
+            config.module_summary_path,
+            api_key=api_key
         )
         
         # 4. Pre-compute Full Graph
@@ -95,9 +100,11 @@ def process_query(query):
     """Process user query using planner and appropriate agents."""
     config = st.session_state.config
     
+    api_key = st.session_state.get("api_key")
+
     # 1. Planning
     with st.spinner("Thinking..."):
-        plan = planner_agent(config.llm_config_path, query)
+        plan = planner_agent(config.llm_config_path, query, api_key=api_key)
     
     response = {
         "intent": plan.intent,
@@ -119,7 +126,8 @@ def process_query(query):
                     query,
                     st.session_state.vectorstore,
                     st.session_state.metadata,
-                    config.embedding_model
+                    config.embedding_model,
+                    api_key=api_key
                 )
                 
                 symbol_subgraph(
@@ -138,7 +146,8 @@ def process_query(query):
                     config.llm_config_path,
                     query,
                     st.session_state.module_summaries,
-                    st.session_state.metadata
+                    st.session_state.metadata,
+                    api_key=api_key
                 )
                 
                 module_subgraph(
@@ -175,7 +184,8 @@ def process_query(query):
                     st.session_state.vectorstore,
                     st.session_state.metadata,
                     config.embedding_model,
-                    doc_path
+                    doc_path,
+                    api_key=api_key
                 )
                 response["content"] = doc
 
@@ -188,7 +198,8 @@ def process_query(query):
                 query,
                 st.session_state.vectorstore,
                 st.session_state.metadata,
-                config.embedding_model
+                config.embedding_model,
+                api_key=api_key
             )
             response["content"] = answer
     
@@ -209,6 +220,12 @@ with st.sidebar:
         ["➕ New Project"] + project_names,
         index=0 if not st.session_state.active_project else (project_names.index(st.session_state.active_project) + 1 if st.session_state.active_project in project_names else 0)
     )
+    
+    # API Key Input
+    st.divider()
+    api_key_input = st.text_input("🔑 Bedrock API Key", type="password", help="Enter your AWS Access Key ID if not set in environment.")
+    if api_key_input:
+        st.session_state.api_key = api_key_input
     
     if selected_option == "➕ New Project":
         if st.session_state.active_project is not None:

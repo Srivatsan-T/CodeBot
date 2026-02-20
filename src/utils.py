@@ -46,13 +46,14 @@ def load_config(path: str) -> dict:
         return json.load(f)
 
 
-def create_llm_for_agent(config: dict, agent_type: str) -> ChatOpenAI:
+def create_llm_for_agent(config: dict, agent_type: str, api_key: str = None) -> ChatOpenAI:
     """
     Factory to create an LLM instance for a specific agent type.
     
     Args:
         config: Full config dict
         agent_type: Type of agent (planner, symbol_selector, etc.)
+        api_key: Optional API key override (e.g. from UI)
         
     Returns:
         ChatOpenAI instance configured for the active provider
@@ -63,16 +64,17 @@ def create_llm_for_agent(config: dict, agent_type: str) -> ChatOpenAI:
     else:
         raise ValueError(f"No configuration found for agent type: {agent_type}")
 
-    return create_llm_from_config(config, config_name)
+    return create_llm_from_config(config, config_name, api_key)
 
 
-def create_llm_from_config(config: dict, agent_config_name: str) -> ChatOpenAI:
+def create_llm_from_config(config: dict, agent_config_name: str, api_key: str = None) -> ChatOpenAI:
     """
     Create a LangChain ChatOpenAI instance from a specific config name.
     
     Args:
         config: Full config dict
         agent_config_name: Key in config['agents'] (e.g., 'planner_bedrock')
+        api_key: Optional API key override
     
     Returns:
         ChatOpenAI instance
@@ -90,15 +92,17 @@ def create_llm_from_config(config: dict, agent_config_name: str) -> ChatOpenAI:
         
     provider_cfg = config["providers"][provider_name]
     
-    api_key = os.getenv(provider_cfg["env_key"])
+    # Priority: Explicit Argument > Environment Variable
+    if not api_key:
+        api_key = os.getenv(provider_cfg["env_key"])
     
     # Provider-specific logic
     if provider_name == "ollama":
         if not api_key: api_key = "ollama" # Dummy key
     elif provider_name == "bedrock":
-        if not api_key: raise ValueError(f"Missing environment variable: {provider_cfg['env_key']}")
+        if not api_key: raise ValueError(f"Missing API Key for Bedrock. Please enter it in the UI or set {provider_cfg['env_key']}.")
     elif provider_name == "gemini":
-        if not api_key: raise ValueError(f"Missing environment variable: {provider_cfg['env_key']}")
+        if not api_key: raise ValueError(f"Missing API Key for Gemini. Please enter it in the UI or set {provider_cfg['env_key']}.")
     
     return ChatOpenAI(
         model=agent_cfg["model"],

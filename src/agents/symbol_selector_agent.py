@@ -136,10 +136,11 @@ def symbol_selector_agent(
     index,
     metadata: List[dict],
     embedding_model_name: str,
+    api_key: str = None
 ) -> dict:
     """Symbol selector agent using RAG and LangChain."""
     config = load_config(llm_config_path)
-    llm = create_llm_for_agent(config, "symbol_selector")
+    llm = create_llm_for_agent(config, "symbol_selector", api_key)
     system_prompt = config["agents"][config["active_models"]["symbol_selector"]]["system_prompt"]
     
     agent = SymbolSelectorAgent(

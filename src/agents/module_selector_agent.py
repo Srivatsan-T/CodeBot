@@ -106,10 +106,11 @@ def module_selector_agent(
     query: str,
     module_summaries: dict,
     metadata: List[dict],
+    api_key: str = None
 ) -> dict:
     """Module selector agent using LangChain."""
     config = load_config(llm_config_path)
-    llm = create_llm_for_agent(config, "module_selector")
+    llm = create_llm_for_agent(config, "module_selector", api_key)
     system_prompt = config["agents"][config["active_models"]["module_selector"]]["system_prompt"]
     
     agent = ModuleSelectorAgent(

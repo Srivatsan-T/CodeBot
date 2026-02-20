@@ -39,19 +39,20 @@ class PlannerOutput(BaseModel):
     )
 
 
-def planner_agent(llm_config_path: str, query: str) -> PlannerOutput:
+def planner_agent(llm_config_path: str, query: str, api_key: str = None) -> PlannerOutput:
     """
     Planner agent using LangChain structured outputs.
     
     Args:
         llm_config_path: Path to LLM config JSON
         query: User query
+        api_key: Optional API key override
         
     Returns:
         PlannerOutput with classification
     """
     config = load_config(llm_config_path)
-    llm = create_llm_for_agent(config, "planner")
+    llm = create_llm_for_agent(config, "planner", api_key)
     
     from langchain_core.output_parsers import PydanticOutputParser
     

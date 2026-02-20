@@ -112,7 +112,8 @@ def build_module_summaries(
     llm_config_path: str,
     metadata: List[dict],
     output_path: str,
-    batch_size: int = 10
+    batch_size: int = 10,
+    api_key: str = None
 ) -> Dict[str, dict]:
     """
     Build module summaries using LangChain with batch processing.
@@ -122,13 +123,13 @@ def build_module_summaries(
         metadata: List of all symbols
         output_path: Path to save summaries JSON
         batch_size: Number of modules to process before saving checkpoint
+        api_key: Optional API key override
         
     Returns:
         Dict mapping file_path to summary dict
     """
     config = load_config(llm_config_path)
-    config = load_config(llm_config_path)
-    llm = create_llm_for_agent(config, "module_summary")
+    llm = create_llm_for_agent(config, "module_summary", api_key)
     system_prompt = config["agents"][config["active_models"]["module_summary"]]["system_prompt"]
     
     agent = ModuleSummaryAgent(llm=llm, system_prompt=system_prompt)
@@ -185,6 +186,7 @@ def load_or_build_module_summaries(
     llm_config_path: str,
     metadata: List[dict],
     output_path: str,
+    api_key: str = None
 ) -> Dict[str, dict]:
     """Load or build module summaries."""
     output_path = Path(output_path)
@@ -199,6 +201,7 @@ def load_or_build_module_summaries(
         llm_config_path=llm_config_path,
         metadata=metadata,
         output_path=str(output_path),
+        api_key=api_key,
     )
     
     return summaries

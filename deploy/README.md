@@ -1,92 +1,101 @@
 # Deploying CodeBot to AWS EC2
 
-This guide outlines the steps to deploy the CodeBot application (Streamlit UI + Webhook Server) to an AWS EC2 instance using Docker Compose.
+This guide walks you through deploying the `CodeBot` application to an Amazon EC2 instance using the provided scripts.
 
 ## Prerequisites
 
-1.  **AWS Account**: Verify you have access to create EC2 instances.
-2.  **SSH Key Pair**: Create/Download an SSH key pair (`.pem`) to access your instance.
-3.  **Local Git**: Ensure your code is pushed to a git repository.
-    > [!IMPORTANT]
-    > **Security**: Ensure your `.env` file is in `.gitignore` and is **NOT** pushed to the repository.
+1.  **AWS Account**: You need an active AWS account.
+2.  **AWS CLI (Optional)**: Useful for managing resources but not strictly required if using the Console.
 
-## Step 1: Launch EC2 Instance
+## Step 1: Launch an EC2 Instance
 
-1.  Go to the **AWS Management Console** -> **EC2**.
-2.  Click **Launch Instance**.
+1.  Log in to the **AWS Management Console**.
+2.  Navigate to **EC2** and click **Launch Instance**.
 3.  **Name**: `CodeBot-Server`
-4.  **AMI**: Amazon Linux 2023 AMI (HVM) - Kernel 6.1
-5.  **Instance Type**: `t3.medium` (Recommended: 2 vCPU, 4GB RAM) or larger if running local models.
-6.  **Key pair**: Select your created key pair.
+4.  **AMI**: Select **Amazon Linux 2023 AMI** (Default).
+5.  **Instance Type**: `t2.small` or `t3.small` (Recommended). `t2.micro` might run out of memory during builds.
+6.  **Key Pair**: Create a new key pair (e.g., `codebot-key`) and download the `.pem` file.
 7.  **Network Settings**:
-    - Allow SSH traffic from Anywhere (or your restricted IP).
-    - Allow HTTP/HTTPS traffic from the internet.
-    - **Edit Security Group**: Add Custom TCP Rules:
-        - Port `8501` (Streamlit UI) - Source: Anywhere (`0.0.0.0/0`)
-        - Port `8000` (Webhook) - Source: Anywhere (`0.0.0.0/0`)
-8.  **Storage**: 20GB gp3.
+    *   **Allow SSH traffic** from `My IP` (for security).
+    *   **Allow HTTP/HTTPS** traffic from the internet.
+8.  **Configure Storage**: 8 GB (default) is usually fine, but 16 GB is safer for Docker builds.
 9.  Click **Launch Instance**.
 
-## Step 2: Setup the Server
+## Step 2: Configure Security Group
 
-1.  SSH into your instance:
-    ```bash
-    ssh -i "path/to/key.pem" ec2-user@<public-ip-address>
-    ```
+1.  Go to the **Security Groups** of your created instance.
+2.  Edit **Inbound Rules**.
+3.  Add the following rules:
+    *   **Type**: `Custom TCP`, **Port**: `8501`, **Source**: `0.0.0.0/0` (Streamlit UI)
+    *   **Type**: `Custom TCP`, **Port**: `8000`, **Source**: `0.0.0.0/0` (Webhook Server)
+    *   **Type**: `SSH`, **Port**: `22`, **Source**: `My IP` (Already set)
+4.  Save rules.
 
-2.  Copy the setup script and run it, or paste command by command:
-    ```bash
-    # You can copy the content of deploy/setup_ec2.sh
-    nano setup_ec2.sh
-    chmod +x setup_ec2.sh
-    ./setup_ec2.sh
-    ```
-    
-3.  **Logout and login** again for docker group permission changes to take effect.
-    ```bash
-    exit
-    ssh -i "path/to/key.pem" ec2-user@<public-ip-address>
-    ```
+## Step 3: Connect to the Instance
 
-## Step 3: Deploy Application
+Open your terminal (or PowerShell) and navigate to where your `.pem` key is located.
 
-1.  Clone your repository:
-    ```bash
-    git clone https://github.com/your-username/codebot.git
-    cd codebot
-    ```
+```bash
+# Set permissions for key (Linux/Mac only, Windows users skip this)
+chmod 400 codebot-key.pem
 
-2.  **Securely Transfer .env**:
-    Do NOT commit `.env` to git. Instead, create it on the server:
-    ```bash
-    nano .env
-    ```
-    Paste your production API keys and save (Ctrl+O, Enter, Ctrl+X).
+# SSH into the server
+ssh -i "codebot-key.pem" ec2-user@<YOUR-EC2-PUBLIC-IP>
+```
 
-3.  Build and Run:
-    ```bash
-    chmod +x deploy/start.sh
-    ./deploy/start.sh
-    ```
+## Step 4: Clone the Repository
 
-## Step 4: Maintenance
+Once inside the EC2 instance, first ensure Git is installed, then clone the repository:
 
-- **Updating the app**:
-    ```bash
-    chmod +x deploy/update.sh
-    ./deploy/update.sh
-    ```
-- **Viewing Logs**:
-    ```bash
-    docker compose logs -f
-    ```
+```bash
+# Install Git
+sudo dnf install git -y
 
-## Step 5: Configure GitHub Webhook
+# Clone the repository
+git clone -b master https://github.com/Srivatsan-T/CodeBot.git
+cd CodeBot
+```
 
-1.  Go to your GitHub Repository -> **Settings** -> **Webhooks**.
-2.  Click **Add webhook**.
-3.  **Payload URL**: `http://<public-ip-address>:8000/webhook`
-4.  **Content type**: `application/json`
-5.  **Secret**: The value of `WEBHOOK_SECRET` in your `.env`.
-6.  **Events**: Select "Just the push event".
-7.  Click **Add webhook**.
+*Note: The Docker configuration files are located in the `deploy/` directory.*
+
+## Step 5: Run Setup
+
+Run the foundational setup script. This installs Docker, Git, and configures the environment.
+
+```bash
+chmod +x deploy/setup.sh
+./deploy/setup.sh
+```
+
+**IMPORTANT**: After this script finishes, you MUST **logout and log back in** for the user permission changes to take effect.
+
+```bash
+exit
+ssh -i "codebot-key.pem" ec2-user@<YOUR-EC2-PUBLIC-IP>
+cd CodeBot
+```
+
+## Step 7: Deploy
+
+Run the deployment script to build and start the application.
+
+```bash
+chmod +x deploy/deploy.sh
+./deploy/deploy.sh
+```
+
+## Step 8: Access the Application
+
+*   **UI**: `http://<YOUR-EC2-PUBLIC-IP>:8501`
+*   **Webhook**: `http://<YOUR-EC2-PUBLIC-IP>:8000`
+
+**Important**: When you first load the UI, look for the **"Bedrock API Key"** field in the sidebar. Enter your AWS Access Key ID (or configured Secret Key) there to enable the AI features.
+
+
+## Updating the Application
+
+To update the app in the future (after pushing changes to GitHub):
+
+1.  SSH into the server.
+2.  Navigate to the folder: `cd CodeBot`
+3.  Run the deploy script: `./deploy/deploy.sh`
