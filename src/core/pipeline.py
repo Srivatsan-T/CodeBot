@@ -111,80 +111,106 @@ def generate_full_documentation(project_name: str):
 
 def incremental_update(project_name: str, modified_files: List[str]):
     """
-    Handle incremental updates triggered by webhooks.
-    1. Re-parse specific files (or full repo for simplicity in prototype)
-    2. Update vector index
-    3. Re-generate docs for modified modules
+    Handle updates triggered by webhooks.
+    As requested, simply reloads the repo with a git pull and re-initializes from scratch.
     """
-    print(f"Incremental update for {project_name}. Files: {modified_files}")
+    import subprocess
+    print(f"Update for {project_name}. Triggered by files: {modified_files}")
     projects = load_projects()
-    repo_path = projects.get(project_name)
-    if not repo_path:
+    project_info = projects.get(project_name)
+    
+    if not project_info:
         raise ValueError(f"Project {project_name} not found.")
         
-    # For prototype simplicity: Re-initialize to update index/graph
-    # Optimization: Parsing only modified files would be better but requires more logic
+    repo_path = project_info.get("path")
+    git_url = project_info.get("git_url")
+    
+    # 1. Pull latest changes if it's a cloned git repo
+    if git_url and Path(repo_path).joinpath(".git").exists():
+        print(f"Pulling latest changes for {project_name} from {git_url}...")
+        try:
+            subprocess.run(
+                ["git", "-C", repo_path, "pull"],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Failed to git pull for {project_name}: {e.stderr}")
+            # Continuing initialization even if pull fails, just in case.
+            
+    # 2. Total Rebuild
+    print(f"Re-initializing project {project_name} completely...")
     config, metadata_list = initialize_project(project_name, repo_path)
     
-    # Re-generate docs for modified files
-    # Check if modified file corresponds to a module in metadata
-    # Simple check: filename match
+    # 3. Generate Documentation directly into the repository
+    print(f"Generating updated documentation into the repository for {project_name}...")
     
-    docs_updated = []
+    # Store original docs dir to restore later just in case
+    original_docs_dir = config.docs_dir
     
-    # Load vector store again (returned from init)
-    # We need strictly the object, but initialize_project returns config/metadata tuple
-    # Let's reload to be safe and consistent with generate_full_documentation structure
-    # Actually initialize_project already loads it. We can just use the config to get path.
+    # Map the docs directory to be inside the cloned repository
+    repo_docs_dir = Path(repo_path) / "docs"
+    repo_docs_dir.mkdir(exist_ok=True)
+    config.docs_dir = str(repo_docs_dir)
     
-    # Reload vectorstore for the agent
-    retrievals = generate_retrievals({"symbols": metadata_list}) # metadata_list is slightly different structure than raw parse?
-    # parse_repository returns dict with 'symbols' key. initialize_project returns list of dicts.
-    # generate_retrievals expects dict with 'symbols' key OR path.
-    # Let's align.
+    docs_generated = []
     
-    # Fix: initialize_project returns metadata_list which IS the list of retrieval units/dicts?
-    # No, load_or_create_index returns metadata_list.
-    # Let's just reload cleanly.
-    
-    from core.embedding import load_or_create_index
-    vectorstore, metadata_list = load_or_create_index(
-        retrievals, # Wait, retrievals is needed.
-        config.embedding_model,
-        config.vector_dir
-    )
-    
+    # Iterating over modules to generate docs (similar to generate_full_documentation but overriding docs_dir)
     from agents.planner_agent import PlannerOutput
+    modules = set(m['file_path'] for m in metadata_list if m['symbol_type'] == 'module')
     
-    for file_path in modified_files:
-        # Normalize path separators
-        file_path = file_path.replace("/", "\\") if os.name == 'nt' else file_path.replace("\\", "/")
+    for module_path in modules:
+        module_name = Path(module_path).name
+        print(f"Documenting module: {module_name}")
         
-        # Check if this file is in our modules
-        # This is a loose check. Ideally we match absolute paths.
+        plan = PlannerOutput(
+            intent="documentation",
+            scope="module",
+            is_valid=True,
+            confidence=1.0,
+            original_query=f"Document the module {module_name}"
+        )
         
-        # We'll just try to document it if it looks like a python file
-        if file_path.endswith(".py"):
-             module_name = Path(file_path).name
-             print(f"Updating docs for: {module_name}")
-             
-             plan = PlannerOutput(
-                intent="documentation",
-                scope="module",
-                is_valid=True,
-                confidence=1.0,
-                original_query=f"Update documentation for modified module {module_name}"
-             )
-             
-             documentation_agent(
+        try:
+            # We must pass the correct docs_dir to the agent
+            documentation_agent(
                 config.llm_config_path,
                 plan,
-                f"Update documentation for {module_name} following recent changes.",
-                vectorstore,
+                f"Generate comprehensive documentation for {module_name}",
+                None,  # Not used in our mock implementation
                 metadata_list,
                 config.embedding_model,
                 config.docs_dir
-             )
-             docs_updated.append(module_name)
-             
-    return docs_updated
+            )
+            docs_generated.append(module_name)
+        except Exception as e:
+            print(f"Error documenting {module_name}: {e}")
+            
+    # Restore original dir
+    config.docs_dir = original_docs_dir
+            
+    # 4. Git Push the generated docs back
+    if git_url and Path(repo_path).joinpath(".git").exists():
+        print(f"Pushing documentation updates to GitHub for {project_name}...")
+        try:
+            # Add ONLY the docs directory to avoid accidentally committing user's unpushed config
+            subprocess.run(["git", "-C", repo_path, "add", "docs/"], check=True, capture_output=True)
+            
+            # Commit. 
+            # Note: We use a specific prefix [CodeBot] so the webhook server can ignore its own commits.
+            commit_res = subprocess.run(
+                ["git", "-C", repo_path, "commit", "-m", "[CodeBot] Auto-generated documentation update"],
+                capture_output=True, text=True
+            )
+            
+            if "nothing to commit" not in commit_res.stdout:
+                subprocess.run(["git", "-C", repo_path, "push"], check=True, capture_output=True)
+                print("Successfully pushed documentation to repository!")
+            else:
+                print("Documentation was already up to date. Nothing to push.")
+                
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Failed to git push docs for {project_name}: {e.stderr}")
+    
+    return [m["file_path"] for m in metadata_list if m["symbol_type"] == "module"]

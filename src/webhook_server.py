@@ -15,10 +15,15 @@ sys.path.append(str(Path(__file__).parent))
 from core.pipeline import incremental_update, initialize_project
 from utils import load_projects
 
+from dotenv import load_dotenv
+
+# Load env vars where Streamlit UI saves them
+load_dotenv(override=True)
+
 app = FastAPI(title="CodeBot Webhook Server")
 
 # Configuration (In a real app, load from env or config)
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "my-secret-token")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
 class PushPayload(BaseModel):
     ref: str
@@ -52,43 +57,60 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     
     # Verify signature
     # In production, use the configured secret. 
-    # For prototype, we might skip if not set, but let's be safe.
-    if WEBHOOK_SECRET and WEBHOOK_SECRET != "my-secret-token":
-        verify_signature(payload_body, WEBHOOK_SECRET, signature)
+    if not WEBHOOK_SECRET:
+        # If secret isn't configured yet, reject to be safe.
+        print("WEBHOOK_SECRET not configured. Rejecting payload.")
+        raise HTTPException(status_code=500, detail="Webhook secret not configured on server.")
+        
+    verify_signature(payload_body, WEBHOOK_SECRET, signature)
         
     payload = await request.json()
     
     # Extract info
     repo_name = payload.get("repository", {}).get("name")
+    repo_clone_url = payload.get("repository", {}).get("clone_url")
+    repo_html_url = payload.get("repository", {}).get("html_url")
     
     # Determine project name map
-    # We need to map git repo name to our internal project name.
-    # For now, let's assume project_name == repo_name or we scan our projects.
     projects = load_projects()
     
-    # Simple matching strategy: 
-    # Check if any project path ends with the repo name
     matched_project = None
-    for name, path in projects.items():
-        if Path(path).name == repo_name:
+    
+    # 1. Primary Strategy: Try matching by exactly stored Git URL
+    for name, info in projects.items():
+        stored_url = info.get("git_url")
+        if stored_url and (stored_url == repo_clone_url or stored_url == repo_html_url or stored_url.rstrip(".git") == repo_html_url):
             matched_project = name
             break
             
+    # 2. Fallback Strategy: Check if any project path ends with the repo name
     if not matched_project:
-        # Fallback: check if 'project_name' query param is passed? 
-        # GitHub webhooks don't easily allow query params configuration in the payload itself.
-        # We might need to store repo_url in projects.json to match reliably.
-        # For now, let's try to match by name match.
-        print(f"Could not match repository {repo_name} to a project.")
+        for name, info in projects.items():
+            if Path(info["path"]).name == repo_name:
+                matched_project = name
+                break
+                
+    if not matched_project:
+        print(f"Could not match repository {repo_name} (URL: {repo_clone_url}) to a project.")
         return {"status": "ignored", "reason": "unknown repository"}
-        
-    # Collect modified files
+    # Collect modified files and check for infinite loop
     modified_files = set()
+    codebot_commit = False
+    
     if "commits" in payload:
         for commit in payload["commits"]:
+            message = commit.get("message", "")
+            if message.startswith("[CodeBot]"):
+                codebot_commit = True
+                print(f"Ignoring auto-generated CodeBot commit: {message}")
+                continue # Skip processing files from our own commits
+                
             modified_files.update(commit.get("added", []))
             modified_files.update(commit.get("modified", []))
             # removed? We might want to handle deletion too.
+            
+    if codebot_commit and not modified_files:
+         return {"status": "ignored", "reason": "auto-generated bot commit"}
             
     if not modified_files:
          return {"status": "ignored", "reason": "no file changes"}

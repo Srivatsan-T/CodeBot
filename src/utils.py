@@ -20,14 +20,19 @@ def load_projects() -> dict:
         return {}
     try:
         with open(projects_file, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+            # Handle backward compatibility: older projects.json had string values
+            for k, v in data.items():
+                if isinstance(v, str):
+                    data[k] = {"path": v, "git_url": None}
+            return data
     except Exception:
         return {}
 
-def save_project(name: str, path: str):
+def save_project(name: str, path: str, git_url: str = None):
     """Register a new project."""
     projects = load_projects()
-    projects[name] = path
+    projects[name] = {"path": path, "git_url": git_url}
     
     projects_file = Path(__file__).parent / "artifacts/projects.json"
     projects_file.parent.mkdir(parents=True, exist_ok=True)

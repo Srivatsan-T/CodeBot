@@ -34,7 +34,7 @@ if "config" not in st.session_state:
 if "active_project" not in st.session_state:
     st.session_state.active_project = None
 
-def initialize_system(project_name, repo_path):
+def initialize_system(project_name, repo_path, git_url=None):
     """Initialize the AI system with the given repository."""
     status_container = st.status(f"Initializing {project_name}...", expanded=True)
     
@@ -75,7 +75,7 @@ def initialize_system(project_name, repo_path):
         symbol_graph, module_graph = graph(metadata_list, config.arch_dot)
         
         # Save project to registry
-        save_project(project_name, repo_path)
+        save_project(project_name, repo_path, git_url)
         
         # Store in session state
         st.session_state.config = config
@@ -208,8 +208,54 @@ def process_query(query):
         
     return response
 
-# --- Sidebar: Project Selection ---
+# --- Sidebar: Project Selection & Credentials ---
 with st.sidebar:
+    st.title("🔐 Credentials")
+    
+    # Load existing env vars as defaults
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    default_api_key = os.getenv("AWS_ACCESS_KEY_ID", "")
+    
+    st.info("You must provide your LLM API Key to access the application.")
+    
+    api_key_input = st.text_input("🔑 Bedrock API Key", type="password", value=default_api_key, help="AWS Access Key ID for Bedrock")
+    
+    if st.button("Save API Key"):
+        if api_key_input:
+            # Save to .env so it persists across Streamlit reloads
+            
+            # Read all lines
+            env_lines = []
+            if os.path.exists(".env"):
+                 with open(".env", "r") as f:
+                      env_lines = f.readlines()
+                      
+            # Write back
+            with open(".env", "w") as f:
+                 f.write(f"AWS_ACCESS_KEY_ID={api_key_input}\n")
+                 # Preserve webhook secret if it exists
+                 for line in env_lines:
+                     if line.startswith("WEBHOOK_SECRET="):
+                         f.write(line)
+                         
+            st.session_state.api_key = api_key_input
+            st.success("API Key saved securely!")
+            time.sleep(1)
+            st.rerun()
+        else:
+            st.error("API Key is required.")
+            
+    st.divider()
+    
+    # Enforce Credentials before showing projects
+    if not api_key_input:
+        st.warning("👈 Please securely enter your Bedrock API Key in the sidebar to continue.")
+        st.stop()
+        
+    # Store in session state for current run
+    st.session_state.api_key = api_key_input
+    
     st.title("📂 Projects")
     projects = load_projects()
     project_names = list(projects.keys())
@@ -221,12 +267,6 @@ with st.sidebar:
         index=0 if not st.session_state.active_project else (project_names.index(st.session_state.active_project) + 1 if st.session_state.active_project in project_names else 0)
     )
     
-    # API Key Input
-    st.divider()
-    api_key_input = st.text_input("🔑 Bedrock API Key", type="password", help="Enter your AWS Access Key ID if not set in environment.")
-    if api_key_input:
-        st.session_state.api_key = api_key_input
-    
     if selected_option == "➕ New Project":
         if st.session_state.active_project is not None:
             st.session_state.active_project = None
@@ -235,8 +275,8 @@ with st.sidebar:
     else:
         # Load existing project if changed
         if st.session_state.active_project != selected_option:
-            # Load project data (Simplified loading - ideally we'd cache this)
-            repo_path = projects[selected_option]
+            # Load project data
+            repo_path = projects[selected_option]["path"]
             # Verify path exists
             if os.path.exists(repo_path):
                 initialize_system(selected_option, repo_path)
@@ -266,6 +306,7 @@ if not st.session_state.active_project:
         
         if submitted:
             repo_path = repo_path_local
+            used_git_url = None
             
             # Handle Git Clone
             if git_url and not repo_path_local:
@@ -279,13 +320,14 @@ if not st.session_state.active_project:
                         
                         cloned_path = clone_repository(git_url, str(target_dir))
                         repo_path = str(cloned_path)
+                        used_git_url = git_url
                         st.success(f"Successfully cloned to: {repo_path}")
                 except Exception as e:
                     st.error(f"Clone failed: {str(e)}")
                     st.stop()
             
             if project_name and repo_path and os.path.exists(repo_path):
-                initialize_system(project_name, repo_path)
+                initialize_system(project_name, repo_path, used_git_url)
             else:
                 st.error("Please enter a valid project name and repository path/URL.")
 
@@ -398,16 +440,40 @@ else:
         
         st.info("Continuous Documentation is available via the Webhook Server.")
         
-        st.markdown("#### 1. GitHub Webhook Setup")
+        st.markdown("#### 1. GitHub Webhooks")
         st.markdown(f"""
         To enable automatic documentation updates on `git push`:
-        1. Run the webhook server: `uv run python webhook_server.py`
-        2. Expose port 8000 to the internet (e.g., `ngrok http 8000`)
-        3. Add a Webhook in your GitHub Repo Settings:
-           - **Payload URL**: `https://<your-ngrok-url>/webhook`
+        1. Add a Webhook in your GitHub Repo Settings:
+           - **Payload URL**: `http://<YOUR-EC2-PUBLIC-IP>:8000/webhook`
            - **Content type**: `application/json`
-           - **Secret**: `my-secret-token` (or configure in `.env`)
+           - **Secret**: Configure below.
         """)
+        
+        with st.expander("🔐 Webhook Security", expanded=True):
+             default_webhook_secret = os.getenv("WEBHOOK_SECRET", "")
+             webhook_secret_input = st.text_input("Webhook Secret", type="password", value=default_webhook_secret, help="Secret used to authenticate GitHub Webhooks")
+             
+             if st.button("Enable Webhook Secret"):
+                 if webhook_secret_input:
+                     import os
+                     # Read all lines
+                     env_lines = []
+                     if os.path.exists(".env"):
+                          with open(".env", "r") as f:
+                               env_lines = f.readlines()
+                               
+                     # Write back keeping existing API keys
+                     with open(".env", "w") as f:
+                          for line in env_lines:
+                              if not line.startswith("WEBHOOK_SECRET="):
+                                  f.write(line)
+                          f.write(f"WEBHOOK_SECRET={webhook_secret_input}\n")
+                          
+                     st.session_state.webhook_secret = webhook_secret_input
+                     st.success("Webhook Secret enabled securely! Please restart the CodeBot Webhook Docker Container for it to take effect.")
+                 else:
+                     st.error("Please enter a valid secret.")
+
         
         st.divider()
         
