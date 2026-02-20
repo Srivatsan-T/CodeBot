@@ -29,8 +29,6 @@ RUN uv pip install --system -r pyproject.toml
 
 # Copy the rest of the application
 COPY src/ src/
-COPY .env .
-
 # Expose ports
 # Streamlit
 EXPOSE 8501
