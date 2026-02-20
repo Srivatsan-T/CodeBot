@@ -21,7 +21,9 @@ sudo systemctl enable docker
 sudo usermod -a -G docker ec2-user
 
 # 5. Install Docker Compose (plugin)
-sudo dnf install docker-compose-plugin -y
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # 6. Setup Swap (Optional but recommended for t2.micro/small instances)
 if [ ! -f /swapfile ]; then
