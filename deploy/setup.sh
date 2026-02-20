@@ -20,10 +20,14 @@ sudo systemctl enable docker
 # 4. Add ec2-user to docker group
 sudo usermod -a -G docker ec2-user
 
-# 5. Install Docker Compose (plugin)
+# 5. Install Docker Compose and Buildx plugins
 sudo mkdir -p /usr/local/lib/docker/cli-plugins
 sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) -o /usr/local/lib/docker/cli-plugins/docker-compose
 sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+sudo curl -SL https://github.com/docker/buildx/releases/download/v0.17.1/buildx-v0.17.1.linux-$ARCH -o /usr/local/lib/docker/cli-plugins/docker-buildx
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
 
 # 6. Setup Swap (Optional but recommended for t2.micro/small instances)
 if [ ! -f /swapfile ]; then
