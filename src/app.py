@@ -261,7 +261,7 @@ with st.sidebar:
     project_names = list(projects.keys())
     
     # Selection logic with integrated Delete button
-    sel_col, del_col = st.columns([5, 1])
+    sel_col, del_col = st.columns([5, 1], vertical_alignment="bottom")
     
     with sel_col:
         selected_option = st.selectbox(
@@ -510,7 +510,7 @@ else:
              default_webhook_secret = os.getenv("WEBHOOK_SECRET", "")
              webhook_secret_input = st.text_input("Webhook Secret", type="password", value=default_webhook_secret, help="Secret used to authenticate GitHub Webhooks")
              
-             if st.button("Enable Webhook Secret"):
+             if st.button("Enable Webhook & Generate Docs", type="primary"):
                  if webhook_secret_input:
                      import os
                      # Read all lines
@@ -527,22 +527,31 @@ else:
                           f.write(f"WEBHOOK_SECRET={webhook_secret_input}\n")
                           
                      st.session_state.webhook_secret = webhook_secret_input
-                     st.success("Webhook Secret enabled securely! Please restart the CodeBot Webhook Docker Container for it to take effect.")
+                     st.success("Webhook Secret saved successfully! Please restart the CodeBot Webhook Docker Container for it to take effect.")
+                     
+                     # Automatically generate docs
+                     st.info("Starting initial full documentation run to sync repository...")
+                     progress_bar = st.progress(0)
+                     status_text = st.empty()
+                     
+                     def update_progress(current, total, item_name):
+                         # Streamlit progress bar needs value exactly between [0.0, 1.0]
+                         if total > 0:
+                             perc = min(1.0, current / total)
+                             progress_bar.progress(perc)
+                         if current == total:
+                             status_text.success("🎉 Documentation Generation Complete!")
+                         else:
+                             status_text.text(f"⏳ Generating documentation for module: {item_name} ({current + 1}/{total})")
+                     
+                     try:
+                         from core.pipeline import generate_full_documentation
+                         docs = generate_full_documentation(
+                             st.session_state.active_project, 
+                             progress_callback=update_progress
+                         )
+                         st.balloons()
+                     except Exception as e:
+                         st.error(f"Failed to generate documentation: {e}")
                  else:
                      st.error("Please enter a valid secret.")
-
-        
-        st.divider()
-        
-        st.markdown("#### 2. Manual Trigger")
-        st.write("Generate comprehensive documentation for all modules in this project.")
-        
-        if st.button("📚 Generate Full Documentation", type="primary"):
-            try:
-                from core.pipeline import generate_full_documentation
-                with st.spinner("Generating documentation for all modules... This may take a while."):
-                    docs = generate_full_documentation(st.session_state.active_project)
-                    st.success(f"Successfully generated documentation for {len(docs)} modules!")
-                    st.balloons()
-            except Exception as e:
-                st.error(f"Failed to generate documentation: {e}")

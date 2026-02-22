@@ -48,9 +48,10 @@ def initialize_project(project_name: str, repo_path: str):
     
     return config, metadata_list
 
-def generate_full_documentation(project_name: str):
+def generate_full_documentation(project_name: str, progress_callback=None):
     """
     Generate documentation for all modules in the project.
+    Accepts an optional progress_callback(current, total, current_item_name).
     """
     print(f"Generating full documentation for {project_name}...")
     config = get_config_for_project(project_name)
@@ -80,19 +81,25 @@ def generate_full_documentation(project_name: str):
     
     # Iterate over all modules
     modules = set(m['file_path'] for m in metadata_list if m['symbol_type'] == 'module')
+    modules_list = list(modules)
+    total_modules = len(modules_list)
     
     docs_generated = []
     
-    for module_path in modules:
+    for i, module_path in enumerate(modules_list):
         module_name = Path(module_path).name
         print(f"Documenting module: {module_name}")
         
+        if progress_callback:
+            progress_callback(i, total_modules, module_name)
+            
         plan = PlannerOutput(
             intent="documentation",
             scope="module",
             is_valid=True,
             confidence=1.0,
-            original_query=f"Document the module {module_name}"
+            original_query=f"Document the module {module_name}",
+            needs_dependencies=False
         )
         
         doc_content = documentation_agent(
@@ -105,6 +112,9 @@ def generate_full_documentation(project_name: str):
             config.docs_dir
         )
         docs_generated.append(module_name)
+        
+    if progress_callback:
+        progress_callback(total_modules, total_modules, "Complete")
         
     print(f"Generated documentation for {len(docs_generated)} modules.")
     return docs_generated
