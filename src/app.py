@@ -260,12 +260,30 @@ with st.sidebar:
     projects = load_projects()
     project_names = list(projects.keys())
     
-    # Selection logic
-    selected_option = st.selectbox(
-        "Select Project",
-        ["➕ New Project"] + project_names,
-        index=0 if not st.session_state.active_project else (project_names.index(st.session_state.active_project) + 1 if st.session_state.active_project in project_names else 0)
-    )
+    # Selection logic with integrated Delete button
+    sel_col, del_col = st.columns([5, 1])
+    
+    with sel_col:
+        selected_option = st.selectbox(
+            "Select Project",
+            ["➕ New Project"] + project_names,
+            index=0 if not st.session_state.active_project else (project_names.index(st.session_state.active_project) + 1 if st.session_state.active_project in project_names else 0),
+            label_visibility="collapsed"
+        )
+        
+    with del_col:
+        # Show delete button only if an actual project is selected
+        if selected_option != "➕ New Project":
+            if st.button("❌", help=f"Delete {selected_option}"):
+                delete_project(selected_option)
+                if selected_option in st.session_state.messages:
+                    del st.session_state.messages[selected_option]
+                if st.session_state.active_project == selected_option:
+                    st.session_state.active_project = None
+                    st.session_state.config = None
+                st.success("Deleted!")
+                time.sleep(1)
+                st.rerun()
     
     if selected_option == "➕ New Project":
         if st.session_state.active_project is not None:
@@ -389,22 +407,6 @@ else:
                 st.metric("Modules", module_count)
             with stats_cols[2]:
                 st.metric("Last Indexed", "Just now")
-                
-        # Danger Zone
-        st.divider()
-        with st.expander("⚠️ Danger Zone", expanded=False):
-            st.warning("Deleting a project will remove all its parsed artifacts and cloned/uploaded source maps from your local machine. This action cannot be undone.")
-            confirm_delete_project = st.checkbox("I understand the consequences, delete this project.")
-            if st.button("Delete Project", disabled=not confirm_delete_project):
-                with st.spinner("Deleting project..."):
-                    delete_project(st.session_state.active_project)
-                    if st.session_state.active_project in st.session_state.messages:
-                        del st.session_state.messages[st.session_state.active_project]
-                    st.session_state.active_project = None
-                    st.session_state.config = None
-                    st.success("Project deleted successfully!")
-                    time.sleep(1)
-                    st.rerun()
 
     with tab_chat:
         st.markdown("### 💬 Chat with your Codebase")
@@ -416,36 +418,33 @@ else:
             
         project_messages = st.session_state.messages[active_proj]
         
-        # Display History inside a fixed-height container that auto-scrolls to bottom
-        messages_container = st.container(height=600, border=False)
-        
-        with messages_container:
-            for msg in project_messages:
-                with st.chat_message(msg["role"]):
-                    if msg.get("intent") == "documentation":
-                        st.markdown("### 📄 Generated Documentation")
-                        with st.expander("View Full Documentation", expanded=False):
-                            st.markdown(msg["content"])
-                        # Generate unique key for history downloads
-                        st.download_button(
-                            label="Download Markdown",
-                            data=msg["content"],
-                            file_name=f"documentation_{int(time.time())}.md",
-                            mime="text/markdown",
-                            key=f"dl_{time.time()}_{hash(msg['content'])}"
-                        )
-                    else:
+        # Display History
+        for msg in project_messages:
+            with st.chat_message(msg["role"]):
+                if msg.get("intent") == "documentation":
+                    st.markdown("### 📄 Generated Documentation")
+                    with st.expander("View Full Documentation", expanded=False):
                         st.markdown(msg["content"])
-                        
-                    if "artifacts" in msg:
-                        for artifact in msg["artifacts"]:
-                            if artifact["type"] == "graphviz":
-                                try:
-                                    with open(artifact["path"], "r", encoding="utf-8") as f:
-                                        dot_source = f.read()
-                                    st.graphviz_chart(dot_source)
-                                except Exception as e:
-                                    st.error(f"Failed to render diagram: {e}")
+                    # Generate unique key for history downloads
+                    st.download_button(
+                        label="Download Markdown",
+                        data=msg["content"],
+                        file_name=f"documentation_{int(time.time())}.md",
+                        mime="text/markdown",
+                        key=f"dl_{time.time()}_{hash(msg['content'])}"
+                    )
+                else:
+                    st.markdown(msg["content"])
+                    
+                if "artifacts" in msg:
+                    for artifact in msg["artifacts"]:
+                        if artifact["type"] == "graphviz":
+                            try:
+                                with open(artifact["path"], "r", encoding="utf-8") as f:
+                                    dot_source = f.read()
+                                st.graphviz_chart(dot_source)
+                            except Exception as e:
+                                st.error(f"Failed to render diagram: {e}")
         
         # Input
         if prompt := st.chat_input("Ask about architecture, flows, or code..."):
@@ -453,37 +452,36 @@ else:
             # Immediately append user message and refresh UI to show it at bottom
             st.session_state.messages[active_proj].append({"role": "user", "content": prompt})
             
-            with messages_container:
-                 with st.chat_message("user"):
-                     st.markdown(prompt)
-                     
-                 # Assistant Response Stream
-                 with st.chat_message("assistant"):
-                     response_data = process_query(prompt)
-                     
-                     if response_data.get("intent") == "documentation":
-                         st.markdown("### 📄 Generated Documentation")
-                         with st.expander("View Full Documentation", expanded=True):
-                             st.markdown(response_data["content"])
-                         st.download_button(
-                             label="Download Markdown",
-                             data=response_data["content"],
-                             file_name=f"documentation_{int(time.time())}.md",
-                             mime="text/markdown",
-                             key=f"dl_new_{int(time.time())}"
-                         )
-                     else:
-                         st.markdown(response_data["content"])
-                         
-                     if response_data["artifacts"]:
-                         for artifact in response_data["artifacts"]:
-                             if artifact["type"] == "graphviz":
-                                 try:
-                                     with open(artifact["path"], "r", encoding="utf-8") as f:
-                                         dot_source = f.read()
-                                     st.graphviz_chart(dot_source)
-                                 except Exception as e:
-                                     st.error(f"Failed to render diagram: {e}")
+            with st.chat_message("user"):
+                st.markdown(prompt)
+                
+            # Assistant Response Stream
+            with st.chat_message("assistant"):
+                response_data = process_query(prompt)
+                
+                if response_data.get("intent") == "documentation":
+                    st.markdown("### 📄 Generated Documentation")
+                    with st.expander("View Full Documentation", expanded=True):
+                        st.markdown(response_data["content"])
+                    st.download_button(
+                        label="Download Markdown",
+                        data=response_data["content"],
+                        file_name=f"documentation_{int(time.time())}.md",
+                        mime="text/markdown",
+                        key=f"dl_new_{int(time.time())}"
+                    )
+                else:
+                    st.markdown(response_data["content"])
+                    
+                if response_data["artifacts"]:
+                    for artifact in response_data["artifacts"]:
+                        if artifact["type"] == "graphviz":
+                            try:
+                                with open(artifact["path"], "r", encoding="utf-8") as f:
+                                    dot_source = f.read()
+                                st.graphviz_chart(dot_source)
+                            except Exception as e:
+                                st.error(f"Failed to render diagram: {e}")
             
             st.session_state.messages[active_proj].append({
                 "role": "assistant",
@@ -492,7 +490,6 @@ else:
                 "intent": response_data.get("intent")
             })
             
-            # Rerun so the container re-renders with the exact height and forces autoscroll to new tail
             st.rerun()
 
     with tab_services:
