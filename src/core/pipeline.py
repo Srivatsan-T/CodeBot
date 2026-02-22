@@ -180,10 +180,16 @@ def incremental_update(project_name: str, modified_files: List[str]):
             scope="module",
             is_valid=True,
             confidence=1.0,
-            original_query=f"Document the module {module_name}"
+            original_query=f"Document the module {module_name}",
+            needs_dependencies=False
         )
         
         try:
+            import os
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+            webhook_api_key = os.getenv("AWS_ACCESS_KEY_ID")
+
             # We must pass the correct docs_dir to the agent
             documentation_agent(
                 config.llm_config_path,
@@ -192,7 +198,8 @@ def incremental_update(project_name: str, modified_files: List[str]):
                 None,  # Not used in our mock implementation
                 metadata_list,
                 config.embedding_model,
-                config.docs_dir
+                config.docs_dir,
+                api_key=webhook_api_key
             )
             docs_generated.append(module_name)
         except Exception as e:
