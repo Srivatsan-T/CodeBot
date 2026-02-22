@@ -55,14 +55,17 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     payload_body = await request.body()
     signature = request.headers.get("x-hub-signature-256")
     
+    # Reload env vars dynamically so we don't need to restart the server
+    load_dotenv(override=True)
+    current_secret = os.getenv("WEBHOOK_SECRET")
+    
     # Verify signature
-    # In production, use the configured secret. 
-    if not WEBHOOK_SECRET:
+    if not current_secret:
         # If secret isn't configured yet, reject to be safe.
         print("WEBHOOK_SECRET not configured. Rejecting payload.")
         raise HTTPException(status_code=500, detail="Webhook secret not configured on server.")
         
-    verify_signature(payload_body, WEBHOOK_SECRET, signature)
+    verify_signature(payload_body, current_secret, signature)
         
     payload = await request.json()
     

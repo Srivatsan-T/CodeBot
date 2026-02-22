@@ -3,8 +3,15 @@ set -e
 
 echo "Starting deployment..."
 
-# 1. Pull latest changes from git
-git pull origin master
+# 1. Safely pull latest changes from git
+echo "Saving any local changes..."
+git stash push -u -m "Auto-stash before deploy" || true
+
+echo "Pulling latest master..."
+git pull
+
+echo "Restoring local changes (if any)..."
+git stash pop || true
 
 # 2. Build and start containers
 # Ensure an empty .env file exists so docker doesn't mount it as a directory

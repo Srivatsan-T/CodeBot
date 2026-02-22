@@ -48,7 +48,7 @@ def initialize_project(project_name: str, repo_path: str):
     
     return config, metadata_list
 
-def generate_full_documentation(project_name: str, progress_callback=None):
+def generate_full_documentation(project_name: str, progress_callback=None, api_key: str = None):
     """
     Generate documentation for all modules in the project.
     Accepts an optional progress_callback(current, total, current_item_name).
@@ -109,7 +109,8 @@ def generate_full_documentation(project_name: str, progress_callback=None):
             vectorstore,
             metadata_list,
             config.embedding_model,
-            config.docs_dir
+            config.docs_dir,
+            api_key=api_key
         )
         docs_generated.append(module_name)
         

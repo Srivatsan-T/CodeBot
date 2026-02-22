@@ -527,7 +527,7 @@ else:
                           f.write(f"WEBHOOK_SECRET={webhook_secret_input}\n")
                           
                      st.session_state.webhook_secret = webhook_secret_input
-                     st.success("Webhook Secret saved successfully! Please restart the CodeBot Webhook Docker Container for it to take effect.")
+                     st.success("Webhook Secret saved successfully and is now active!")
                      
                      # Automatically generate docs
                      st.info("Starting initial full documentation run to sync repository...")
@@ -548,7 +548,8 @@ else:
                          from core.pipeline import generate_full_documentation
                          docs = generate_full_documentation(
                              st.session_state.active_project, 
-                             progress_callback=update_progress
+                             progress_callback=update_progress,
+                             api_key=st.session_state.get("api_key")
                          )
                          st.balloons()
                      except Exception as e:
