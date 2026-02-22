@@ -511,3 +511,27 @@ else:
         
         Once set up, anytime a developer pushes to `master`, CodeBot will catch the changes, document the modified files, and push a pull request or commit the new markdown files right back into the repo!
         """)
+        
+        st.divider()
+        st.markdown("#### 📡 Webhook Server Logs")
+        st.write("Monitor incoming GitHub API pings and automatic documentation triggers.")
+        
+        col_log_1, col_log_2 = st.columns([5, 1])
+        with col_log_1:
+             pass
+        with col_log_2:
+             if st.button("🔄 Refresh Logs"):
+                 st.rerun()
+                 
+        log_file = Path(__file__).parent / "artifacts" / "logs" / "webhook.log"
+        if log_file.exists():
+            with open(log_file, "r") as f:
+                # Read last 50 lines
+                lines = f.readlines()
+                log_content = "".join(lines[-50:])
+            if log_content:
+                st.code(log_content, language="log")
+            else:
+                st.info("Log file is empty. Waiting for GitHub webhooks...")
+        else:
+            st.info("Log file not found. Waiting for first Webhook API call...")
