@@ -96,7 +96,19 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     if not matched_project:
         print(f"Could not match repository {repo_name} (URL: {repo_clone_url}) to a project.")
         return {"status": "ignored", "reason": "unknown repository"}
-    # Collect modified files and check for infinite loop
+    # Determine event type
+    github_event = request.headers.get("x-github-event", "push")
+    
+    if github_event == "ping":
+        print(f"Received GitHub ping for {matched_project}. Triggering initial full analysis...")
+        # An empty file list tells incremental_update to rebuild docs for all modules
+        background_tasks.add_task(process_webhook_background, matched_project, [])
+        return {"status": "accepted", "project": matched_project, "action": "initial_ping_analysis"}
+
+    if github_event != "push":
+        return {"status": "ignored", "reason": f"unhandled event type: {github_event}"}
+
+    # Collect modified files and check for infinite loop for push events
     modified_files = set()
     codebot_commit = False
     

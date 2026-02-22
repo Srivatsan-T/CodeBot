@@ -216,14 +216,17 @@ with st.sidebar:
     from dotenv import load_dotenv
     load_dotenv(override=True)
     default_api_key = os.getenv("AWS_ACCESS_KEY_ID", "")
+    default_webhook_secret = os.getenv("WEBHOOK_SECRET", "")
     
-    st.info("You must provide your LLM API Key to access the application.")
+    st.info("You must provide your credentials to use the application.")
     
     api_key_input = st.text_input("🔑 Bedrock API Key", type="password", value=default_api_key, help="AWS Access Key ID for Bedrock")
+    webhook_secret_input = st.text_input("🛡️ Webhook Secret", type="password", value=default_webhook_secret, help="Global Secret used to authenticate GitHub Webhooks")
     
-    if st.button("Save API Key"):
+    if st.button("Save Credentials"):
         if api_key_input:
             # Save to .env so it persists across Streamlit reloads
+            import os
             
             # Read all lines
             env_lines = []
@@ -234,13 +237,13 @@ with st.sidebar:
             # Write back
             with open(".env", "w") as f:
                  f.write(f"AWS_ACCESS_KEY_ID={api_key_input}\n")
-                 # Preserve webhook secret if it exists
-                 for line in env_lines:
-                     if line.startswith("WEBHOOK_SECRET="):
-                         f.write(line)
+                 if webhook_secret_input:
+                     f.write(f"WEBHOOK_SECRET={webhook_secret_input}\n")
                          
             st.session_state.api_key = api_key_input
-            st.success("API Key saved securely!")
+            if webhook_secret_input:
+                st.session_state.webhook_secret = webhook_secret_input
+            st.success("Credentials saved securely!")
             time.sleep(1)
             st.rerun()
         else:
@@ -497,62 +500,14 @@ else:
         
         st.info("Continuous Documentation is available via the Webhook Server.")
         
-        st.markdown("#### 1. GitHub Webhooks")
+        st.markdown("#### GitHub Webhooks")
         st.markdown(f"""
         To enable automatic documentation updates on `git push`:
-        1. Add a Webhook in your GitHub Repo Settings:
+        1. Ensure your global **Webhook Secret** is configured in the left Sidebar under Credentials.
+        2. Add a Webhook in your GitHub Repo Settings:
            - **Payload URL**: `http://<YOUR-EC2-PUBLIC-IP>:8000/webhook`
            - **Content type**: `application/json`
-           - **Secret**: Configure below.
-        """)
+           - **Secret**: The same secret you entered in the sidebar.
         
-        with st.expander("🔐 Webhook Security", expanded=True):
-             default_webhook_secret = os.getenv("WEBHOOK_SECRET", "")
-             webhook_secret_input = st.text_input("Webhook Secret", type="password", value=default_webhook_secret, help="Secret used to authenticate GitHub Webhooks")
-             
-             if st.button("Enable Webhook & Generate Docs", type="primary"):
-                 if webhook_secret_input:
-                     import os
-                     # Read all lines
-                     env_lines = []
-                     if os.path.exists(".env"):
-                          with open(".env", "r") as f:
-                               env_lines = f.readlines()
-                               
-                     # Write back keeping existing API keys
-                     with open(".env", "w") as f:
-                          for line in env_lines:
-                              if not line.startswith("WEBHOOK_SECRET="):
-                                  f.write(line)
-                          f.write(f"WEBHOOK_SECRET={webhook_secret_input}\n")
-                          
-                     st.session_state.webhook_secret = webhook_secret_input
-                     st.success("Webhook Secret saved successfully and is now active!")
-                     
-                     # Automatically generate docs
-                     st.info("Starting initial full documentation run to sync repository...")
-                     progress_bar = st.progress(0)
-                     status_text = st.empty()
-                     
-                     def update_progress(current, total, item_name):
-                         # Streamlit progress bar needs value exactly between [0.0, 1.0]
-                         if total > 0:
-                             perc = min(1.0, current / total)
-                             progress_bar.progress(perc)
-                         if current == total:
-                             status_text.success("🎉 Documentation Generation Complete!")
-                         else:
-                             status_text.text(f"⏳ Generating documentation for module: {item_name} ({current + 1}/{total})")
-                     
-                     try:
-                         from core.pipeline import generate_full_documentation
-                         docs = generate_full_documentation(
-                             st.session_state.active_project, 
-                             progress_callback=update_progress,
-                             api_key=st.session_state.get("api_key")
-                         )
-                         st.balloons()
-                     except Exception as e:
-                         st.error(f"Failed to generate documentation: {e}")
-                 else:
-                     st.error("Please enter a valid secret.")
+        Once set up, anytime a developer pushes to `master`, CodeBot will catch the changes, document the modified files, and push a pull request or commit the new markdown files right back into the repo!
+        """)
