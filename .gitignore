@@ -13,4 +13,3 @@ wheels/
 .env
 src/.env
 
-src/cloned_repos
