@@ -12,6 +12,8 @@ services:
       - ../data:/app/data
       - ../docs:/app/docs
       - ../.env:/app/.env
+      - ../cloned_repos:/app/cloned_repos
+      - ../uploaded_repos:/app/uploaded_repos
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
@@ -29,6 +31,8 @@ services:
       - ../data:/app/data
       - ../docs:/app/docs
       - ../.env:/app/.env
+      - ../cloned_repos:/app/cloned_repos
+      - ../uploaded_repos:/app/uploaded_repos
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
