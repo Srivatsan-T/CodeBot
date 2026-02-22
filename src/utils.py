@@ -40,6 +40,32 @@ def save_project(name: str, path: str, git_url: str = None):
     with open(projects_file, "w") as f:
         json.dump(projects, f, indent=2)
 
+def delete_project(name: str):
+    """Delete a project from the registry and clean up its files."""
+    projects = load_projects()
+    if name not in projects:
+        return
+        
+    project_info = projects[name]
+    repo_path = Path(project_info["path"])
+    
+    # 1. Remove from registry
+    del projects[name]
+    projects_file = Path(__file__).parent / "artifacts/projects.json"
+    with open(projects_file, "w") as f:
+        json.dump(projects, f, indent=2)
+        
+    # 2. Remove artifacts directory
+    artifacts_dir = Path(__file__).parent / "artifacts" / name
+    if artifacts_dir.exists() and artifacts_dir.is_dir():
+        shutil.rmtree(artifacts_dir, ignore_errors=True)
+        
+    # 3. Clean up cloned/uploaded repositories
+    if "cloned_repos" in repo_path.parts or "uploaded_repos" in repo_path.parts:
+        # Avoid deleting the base clone/upload dir, just the project dir
+        if repo_path.exists() and repo_path.is_dir():
+             shutil.rmtree(repo_path, ignore_errors=True)
+
 def get_config_for_project(project_name: str) -> Config:
     """Create a Config instance for a specific project."""
     return Config(project_name=project_name)

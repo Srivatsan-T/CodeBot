@@ -16,7 +16,7 @@ import json
 
 
 
-from utils import load_projects, save_project, get_config_for_project, clone_repository
+from utils import load_projects, save_project, get_config_for_project, clone_repository, delete_project
 
 # Page Config
 st.set_page_config(
@@ -389,6 +389,22 @@ else:
                 st.metric("Modules", module_count)
             with stats_cols[2]:
                 st.metric("Last Indexed", "Just now")
+                
+        # Danger Zone
+        st.divider()
+        with st.expander("⚠️ Danger Zone", expanded=False):
+            st.warning("Deleting a project will remove all its parsed artifacts and cloned/uploaded source maps from your local machine. This action cannot be undone.")
+            confirm_delete_project = st.checkbox("I understand the consequences, delete this project.")
+            if st.button("Delete Project", disabled=not confirm_delete_project):
+                with st.spinner("Deleting project..."):
+                    delete_project(st.session_state.active_project)
+                    if st.session_state.active_project in st.session_state.messages:
+                        del st.session_state.messages[st.session_state.active_project]
+                    st.session_state.active_project = None
+                    st.session_state.config = None
+                    st.success("Project deleted successfully!")
+                    time.sleep(1)
+                    st.rerun()
 
     with tab_chat:
         st.markdown("### 💬 Chat with your Codebase")
