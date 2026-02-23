@@ -256,9 +256,8 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
         )
         
         overview_text = generate_codebase_overview(
-            config.llm_config_path,
             module_summaries,
-            api_key=webhook_api_key
+            config.docs_dir
         )
         
         # Concatenate everything
