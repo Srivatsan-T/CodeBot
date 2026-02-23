@@ -2,6 +2,9 @@ import os
 from pathlib import Path
 from typing import List, Optional
 import time
+import logging
+
+logger = logging.getLogger("webhook")
 
 from config import Config
 from utils import get_config_for_project, save_project, load_projects
@@ -19,7 +22,7 @@ def initialize_project(project_name: str, repo_path: str):
     3. Generate module summaries
     4. Build graph
     """
-    print(f"Initializing {project_name} at {repo_path}...")
+    logger.info(f"Initializing {project_name} at {repo_path}...")
     config = get_config_for_project(project_name)
     
     # 1. Parse
@@ -53,7 +56,7 @@ def generate_full_documentation(project_name: str, progress_callback=None, api_k
     Generate documentation for all modules in the project.
     Accepts an optional progress_callback(current, total, current_item_name).
     """
-    print(f"Generating full documentation for {project_name}...")
+    logger.info(f"Generating full documentation for {project_name}...")
     config = get_config_for_project(project_name)
     
     # Load state
@@ -88,7 +91,7 @@ def generate_full_documentation(project_name: str, progress_callback=None, api_k
     
     for i, module_path in enumerate(modules_list):
         module_name = Path(module_path).name
-        print(f"Documenting module: {module_name}")
+        logger.info(f"Documenting module: {module_name}")
         
         if progress_callback:
             progress_callback(i, total_modules, module_name)
@@ -117,7 +120,7 @@ def generate_full_documentation(project_name: str, progress_callback=None, api_k
     if progress_callback:
         progress_callback(total_modules, total_modules, "Complete")
         
-    print(f"Generated documentation for {len(docs_generated)} modules.")
+    logger.info(f"Generated documentation for {len(docs_generated)} modules.")
     return docs_generated
 
 def incremental_update(project_name: str, modified_files: List[str] = None, removed_files: List[str] = None, full_rebuild: bool = False):
@@ -128,7 +131,7 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
     import subprocess
     modified_files = modified_files or []
     removed_files = removed_files or []
-    print(f"Update for {project_name}. Full Rebuild: {full_rebuild}, Modified: {modified_files}, Removed: {removed_files}")
+    logger.info(f"Update for {project_name}. Full Rebuild: {full_rebuild}, Modified: {modified_files}, Removed: {removed_files}")
     projects = load_projects()
     project_info = projects.get(project_name)
     
@@ -140,7 +143,7 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
     
     # 1. Pull latest changes if it's a cloned git repo
     if git_url and Path(repo_path).joinpath(".git").exists():
-        print(f"Pulling latest changes for {project_name} from {git_url}...")
+        logger.info(f"Pulling latest changes for {project_name} from {git_url}...")
         try:
             subprocess.run(
                 ["git", "-C", repo_path, "pull"],
@@ -149,15 +152,15 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
                 text=True
             )
         except subprocess.CalledProcessError as e:
-            print(f"Warning: Failed to git pull for {project_name}: {e.stderr}")
+            logger.error(f"Failed to git pull for {project_name}: {e.stderr}")
             # Continuing initialization even if pull fails, just in case.
             
     # 2. Total Rebuild
-    print(f"Re-initializing project {project_name} completely...")
+    logger.info(f"Re-initializing project {project_name} completely...")
     config, metadata_list = initialize_project(project_name, repo_path)
     
     # 3. Generate Documentation directly into the repository
-    print(f"Generating updated documentation into the repository for {project_name}...")
+    logger.info(f"Generating updated documentation into the repository for {project_name}...")
     
     # Store original docs dir to restore later just in case
     original_docs_dir = config.docs_dir
@@ -169,7 +172,7 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
     
     # 3.1 Handle removed files
     if removed_files:
-        print(f"Removing documentation for {len(removed_files)} deleted files...")
+        logger.info(f"Removing documentation for {len(removed_files)} deleted files...")
         for removed in removed_files:
             # Files are typically e.g. 'src/utils.py'. The doc is 'utils.py.md'
             filename = Path(removed).name + ".md"
@@ -177,9 +180,9 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
             if doc_file.exists():
                 try:
                     doc_file.unlink()
-                    print(f"Deleted outdated doc file: {doc_file}")
+                    logger.info(f"Deleted outdated doc file: {doc_file}")
                 except Exception as e:
-                    print(f"Error deleting doc file {doc_file}: {e}")
+                    logger.error(f"Error deleting doc file {doc_file}: {e}")
     
     docs_generated = []
     
@@ -189,18 +192,18 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
     
     # 3.2 Filter for modified files (if any are provided)
     if not full_rebuild:
-        print(f"Filtering {len(modules)} modules to only those modified...")
+        logger.info(f"Filtering {len(modules)} modules to only those modified...")
         filtered_modules = set()
         for mod in modules:
             mod_posix = Path(mod).as_posix()
             if any(mod_posix.endswith(mf) for mf in modified_files):
                 filtered_modules.add(mod)
         modules = filtered_modules
-        print(f"Found {len(modules)} modules requiring documentation updates.")
+        logger.info(f"Found {len(modules)} modules requiring documentation updates.")
     
     for module_path in modules:
         module_name = Path(module_path).name
-        print(f"Documenting module: {module_name}")
+        logger.info(f"Documenting module: {module_name}")
         
         plan = PlannerOutput(
             intent="documentation",
@@ -230,15 +233,13 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
             )
             docs_generated.append(module_name)
         except Exception as e:
-            print(f"Error documenting {module_name}: {e}")
+            logger.error(f"Error documenting {module_name}: {e}")
             
     # Restore original dir
     config.docs_dir = original_docs_dir
             
     # 4. Git Push the generated docs back
     if git_url and Path(repo_path).joinpath(".git").exists():
-        import logging
-        logger = logging.getLogger("webhook")
         logger.info(f"Preparing to push documentation updates to GitHub for {project_name}...")
         try:
             # Set git identity for the CodeBot container
