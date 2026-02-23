@@ -239,6 +239,8 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
     config.docs_dir = original_docs_dir
             
     # 4. Git Push the generated docs back
+    logger.info(f"Evaluating push conditions for {project_name}: git_url={bool(git_url)}, repo_path={repo_path}")
+    logger.info(f"Does .git exist? {Path(repo_path).joinpath('.git').exists()}")
     if git_url and Path(repo_path).joinpath(".git").exists():
         logger.info(f"Preparing to push documentation updates to GitHub for {project_name}...")
         try:
