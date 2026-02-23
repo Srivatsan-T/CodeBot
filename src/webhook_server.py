@@ -104,14 +104,23 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     # 1. Primary Strategy: Try matching by exactly stored Git URL
     for name, info in projects.items():
         stored_url = info.get("git_url")
-        if stored_url and (stored_url == repo_clone_url or stored_url == repo_html_url or stored_url.rstrip(".git") == repo_html_url):
-            matched_project = name
-            break
+        if stored_url:
+            # Strip credentials (like PATs) from stored URL for comparison
+            import urllib.parse
+            parsed = urllib.parse.urlparse(stored_url)
+            clean_stored = parsed._replace(netloc=parsed.hostname).geturl() if parsed.hostname else stored_url
             
-    # 2. Fallback Strategy: Check if any project path ends with the repo name
-    if not matched_project:
+            # Compare without credentials and case-insensitive
+            if (clean_stored.lower() == (repo_clone_url or "").lower() or 
+                clean_stored.lower() == (repo_html_url or "").lower() or 
+                clean_stored.lower().rstrip(".git") == (repo_html_url or "").lower()):
+                matched_project = name
+                break
+            
+    # 2. Fallback Strategy: Check if any project path ends with the repo name (case-insensitive)
+    if not matched_project and repo_name:
         for name, info in projects.items():
-            if Path(info["path"]).name == repo_name:
+            if Path(info["path"]).name.lower() == repo_name.lower():
                 matched_project = name
                 break
                 
