@@ -128,6 +128,7 @@ def documentation_agent(
     metadata,
     embedding_model_name: str,
     markdown_path: str,
+    module_name: str,
     api_key: str = None
 ) -> str:
     """
@@ -141,6 +142,7 @@ def documentation_agent(
         metadata: Metadata list
         embedding_model_name: Embedding model name
         markdown_path: Path to save documentation
+        module_name: Name of the module being documented (used for filename)
         api_key: Optional API key override
         
     Returns:
@@ -160,7 +162,7 @@ def documentation_agent(
     
     content = doc_agent.run(query, plan)
     
-    path = Path(f"{markdown_path}/doc_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.md")
+    path = Path(f"{markdown_path}/{module_name}.md")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     

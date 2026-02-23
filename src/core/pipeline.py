@@ -113,6 +113,7 @@ def generate_full_documentation(project_name: str, progress_callback=None, api_k
             metadata_list,
             config.embedding_model,
             config.docs_dir,
+            module_name=module_name,
             api_key=api_key
         )
         docs_generated.append(module_name)
@@ -229,11 +230,52 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
                 metadata_list,
                 config.embedding_model,
                 config.docs_dir,
+                module_name=module_name,
                 api_key=webhook_api_key
             )
             docs_generated.append(module_name)
         except Exception as e:
             logger.error(f"Error documenting {module_name}: {e}")
+            
+    # 3.3 Generate Master Document
+    logger.info(f"Compiling Master Document for {project_name}...")
+    try:
+        from core.embedding import load_or_create_index
+        from agents import load_or_build_module_summaries, generate_codebase_overview
+        import os
+        from dotenv import load_dotenv
+        load_dotenv(override=True)
+        webhook_api_key = os.getenv("AWS_ACCESS_KEY_ID")
+        
+        # Load module summaries to write the overview
+        module_summaries = load_or_build_module_summaries(
+            config.llm_config_path,
+            metadata_list,
+            config.module_summary_path,
+            api_key=webhook_api_key
+        )
+        
+        overview_text = generate_codebase_overview(
+            config.llm_config_path,
+            module_summaries,
+            api_key=webhook_api_key
+        )
+        
+        # Concatenate everything
+        master_content = f"# {project_name} Codebase Overview\n\n{overview_text}\n\n---\n\n## Module Documentation\n\n"
+        
+        for md_file in repo_docs_dir.glob("*.md"):
+            if md_file.name == "CODEBASE_SUMMARY.md":
+                continue
+            master_content += f"### {md_file.name}\n\n"
+            master_content += md_file.read_text(encoding="utf-8") + "\n\n---\n\n"
+            
+        master_path = repo_docs_dir / "CODEBASE_SUMMARY.md"
+        master_path.write_text(master_content, encoding="utf-8")
+        logger.info(f"Successfully generated Master Document at {master_path}")
+        
+    except Exception as e:
+        logger.error(f"Failed to generate Master Document: {e}")
             
     # Restore original dir
     config.docs_dir = original_docs_dir
