@@ -237,14 +237,16 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
             
     # 4. Git Push the generated docs back
     if git_url and Path(repo_path).joinpath(".git").exists():
-        print(f"Pushing documentation updates to GitHub for {project_name}...")
+        import logging
+        logger = logging.getLogger("webhook")
+        logger.info(f"Preparing to push documentation updates to GitHub for {project_name}...")
         try:
             # Set git identity for the CodeBot container
-            subprocess.run(["git", "-C", repo_path, "config", "user.name", "CodeBot"], check=True)
-            subprocess.run(["git", "-C", repo_path, "config", "user.email", "bot@codebot.ai"], check=True)
+            subprocess.run(["git", "-C", repo_path, "config", "user.name", "CodeBot"], check=True, capture_output=True, text=True)
+            subprocess.run(["git", "-C", repo_path, "config", "user.email", "bot@codebot.ai"], check=True, capture_output=True, text=True)
 
             # Add ONLY the docs directory to avoid accidentally committing user's unpushed config
-            subprocess.run(["git", "-C", repo_path, "add", "docs/"], check=True, capture_output=True)
+            subprocess.run(["git", "-C", repo_path, "add", "docs/"], check=True, capture_output=True, text=True)
             
             # Commit. 
             # Note: We use a specific prefix [CodeBot] so the webhook server can ignore its own commits.
@@ -254,16 +256,16 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
             )
             
             if "nothing to commit" not in commit_res.stdout:
-                # To push back, the git repo must have been cloned using a token or SSH key, OR the user must manually set it up.
+                logger.info("Changes committed successfully. Executing git push...")
                 push_res = subprocess.run(["git", "-C", repo_path, "push"], capture_output=True, text=True)
                 if push_res.returncode == 0:
-                     print("Successfully pushed documentation to repository!")
+                     logger.info("Successfully pushed documentation to repository!")
                 else:
-                     print(f"Warning: Failed to git push docs for {project_name}. Git might require authentication credentials. Error: {push_res.stderr}")
+                     logger.error(f"Failed to git push docs for {project_name}. Error: {push_res.stderr}")
             else:
-                print("Documentation was already up to date. Nothing to commit.")
+                logger.info("Documentation was already up to date. Nothing to commit.")
                 
         except subprocess.CalledProcessError as e:
-            print(f"Warning: Failed to git push docs for {project_name}: {e.stderr}")
+            logger.error(f"Failed to git execute docs generation step for {project_name}: {e.stderr}")
     
     return [m["file_path"] for m in metadata_list if m["symbol_type"] == "module"]
