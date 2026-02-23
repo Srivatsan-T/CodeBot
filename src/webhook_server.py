@@ -62,12 +62,13 @@ def verify_signature(payload_body: bytes, secret_token: str, signature_header: s
     if not hmac.compare_digest(expected_signature, signature_header):
         raise HTTPException(status_code=403, detail="Request signatures didn't match!")
 
-async def process_webhook_background(project_name: str, modified_files: List[str]):
+async def process_webhook_background(project_name: str, modified_files: List[str], removed_files: List[str] = None, full_rebuild: bool = False):
     """Background task to run the heavy analysis."""
     logger.info(f"Starting analysis for {project_name}...")
+    removed_files = removed_files or []
     try:
-        updated_docs = incremental_update(project_name, modified_files)
-        logger.info(f"Completed analysis. Updated docs: {updated_docs}")
+        updated_docs = incremental_update(project_name, modified_files, removed_files, full_rebuild=full_rebuild)
+        logger.info(f"Completed analysis. Updated docs: {updated_docs}, Removed: {removed_files}")
     except Exception as e:
         logger.error(f"Error processing webhook: {e}")
 
@@ -124,7 +125,7 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     if github_event == "ping":
         logger.info(f"Received GitHub ping for {matched_project}. Triggering initial full analysis...")
         # An empty file list tells incremental_update to rebuild docs for all modules
-        background_tasks.add_task(process_webhook_background, matched_project, [])
+        background_tasks.add_task(process_webhook_background, matched_project, [], [], full_rebuild=True)
         return {"status": "accepted", "project": matched_project, "action": "initial_ping_analysis"}
 
     if github_event != "push":
@@ -132,6 +133,7 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
 
     # Collect modified files and check for infinite loop for push events
     modified_files = set()
+    removed_files = set()
     codebot_commit = False
     
     if "commits" in payload:
@@ -144,21 +146,21 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
                 
             modified_files.update(commit.get("added", []))
             modified_files.update(commit.get("modified", []))
-            # removed? We might want to handle deletion too.
+            removed_files.update(commit.get("removed", []))
             
-    if codebot_commit and not modified_files:
+    if codebot_commit and not modified_files and not removed_files:
          logger.info("Ignoring push payload entirely (only CodeBot commits found).")
          return {"status": "ignored", "reason": "auto-generated bot commit"}
             
-    if not modified_files:
-         logger.info("Ignoring push payload (no modified files).")
+    if not modified_files and not removed_files:
+         logger.info("Ignoring push payload (no modified files or removed files).")
          return {"status": "ignored", "reason": "no file changes"}
 
     # Run analysis in background
-    logger.info(f"Accepted webhook for {matched_project}. Modified files: {list(modified_files)}")
-    background_tasks.add_task(process_webhook_background, matched_project, list(modified_files))
+    logger.info(f"Accepted webhook for {matched_project}. Modified: {list(modified_files)}, Removed: {list(removed_files)}")
+    background_tasks.add_task(process_webhook_background, matched_project, list(modified_files), list(removed_files))
     
-    return {"status": "accepted", "project": matched_project, "files": list(modified_files)}
+    return {"status": "accepted", "project": matched_project, "files": list(modified_files), "removed": list(removed_files)}
 
 @app.get("/")
 def health_check():

@@ -120,13 +120,15 @@ def generate_full_documentation(project_name: str, progress_callback=None, api_k
     print(f"Generated documentation for {len(docs_generated)} modules.")
     return docs_generated
 
-def incremental_update(project_name: str, modified_files: List[str]):
+def incremental_update(project_name: str, modified_files: List[str] = None, removed_files: List[str] = None, full_rebuild: bool = False):
     """
     Handle updates triggered by webhooks.
     As requested, simply reloads the repo with a git pull and re-initializes from scratch.
     """
     import subprocess
-    print(f"Update for {project_name}. Triggered by files: {modified_files}")
+    modified_files = modified_files or []
+    removed_files = removed_files or []
+    print(f"Update for {project_name}. Full Rebuild: {full_rebuild}, Modified: {modified_files}, Removed: {removed_files}")
     projects = load_projects()
     project_info = projects.get(project_name)
     
@@ -165,11 +167,36 @@ def incremental_update(project_name: str, modified_files: List[str]):
     repo_docs_dir.mkdir(exist_ok=True)
     config.docs_dir = str(repo_docs_dir)
     
+    # 3.1 Handle removed files
+    if removed_files:
+        print(f"Removing documentation for {len(removed_files)} deleted files...")
+        for removed in removed_files:
+            # Files are typically e.g. 'src/utils.py'. The doc is 'utils.py.md'
+            filename = Path(removed).name + ".md"
+            doc_file = repo_docs_dir / filename
+            if doc_file.exists():
+                try:
+                    doc_file.unlink()
+                    print(f"Deleted outdated doc file: {doc_file}")
+                except Exception as e:
+                    print(f"Error deleting doc file {doc_file}: {e}")
+    
     docs_generated = []
     
     # Iterating over modules to generate docs (similar to generate_full_documentation but overriding docs_dir)
     from agents.planner_agent import PlannerOutput
     modules = set(m['file_path'] for m in metadata_list if m['symbol_type'] == 'module')
+    
+    # 3.2 Filter for modified files (if any are provided)
+    if not full_rebuild:
+        print(f"Filtering {len(modules)} modules to only those modified...")
+        filtered_modules = set()
+        for mod in modules:
+            mod_posix = Path(mod).as_posix()
+            if any(mod_posix.endswith(mf) for mf in modified_files):
+                filtered_modules.add(mod)
+        modules = filtered_modules
+        print(f"Found {len(modules)} modules requiring documentation updates.")
     
     for module_path in modules:
         module_name = Path(module_path).name
@@ -212,6 +239,10 @@ def incremental_update(project_name: str, modified_files: List[str]):
     if git_url and Path(repo_path).joinpath(".git").exists():
         print(f"Pushing documentation updates to GitHub for {project_name}...")
         try:
+            # Set git identity for the CodeBot container
+            subprocess.run(["git", "-C", repo_path, "config", "user.name", "CodeBot"], check=True)
+            subprocess.run(["git", "-C", repo_path, "config", "user.email", "bot@codebot.ai"], check=True)
+
             # Add ONLY the docs directory to avoid accidentally committing user's unpushed config
             subprocess.run(["git", "-C", repo_path, "add", "docs/"], check=True, capture_output=True)
             
@@ -223,10 +254,14 @@ def incremental_update(project_name: str, modified_files: List[str]):
             )
             
             if "nothing to commit" not in commit_res.stdout:
-                subprocess.run(["git", "-C", repo_path, "push"], check=True, capture_output=True)
-                print("Successfully pushed documentation to repository!")
+                # To push back, the git repo must have been cloned using a token or SSH key, OR the user must manually set it up.
+                push_res = subprocess.run(["git", "-C", repo_path, "push"], capture_output=True, text=True)
+                if push_res.returncode == 0:
+                     print("Successfully pushed documentation to repository!")
+                else:
+                     print(f"Warning: Failed to git push docs for {project_name}. Git might require authentication credentials. Error: {push_res.stderr}")
             else:
-                print("Documentation was already up to date. Nothing to push.")
+                print("Documentation was already up to date. Nothing to commit.")
                 
         except subprocess.CalledProcessError as e:
             print(f"Warning: Failed to git push docs for {project_name}: {e.stderr}")
