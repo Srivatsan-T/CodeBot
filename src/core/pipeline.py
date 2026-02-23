@@ -14,7 +14,7 @@ from core.retrieval import generate_retrievals
 from agents import load_or_build_module_summaries, generate_codebase_overview, documentation_agent
 from arch import graph
 
-def initialize_project(project_name: str, repo_path: str, git_url: str = None):
+def initialize_project(project_name: str, repo_path: str, git_url: str = None, force_rebuild: bool = False):
     """
     Full initialization of a project:
     1. Parse repo
@@ -33,7 +33,8 @@ def initialize_project(project_name: str, repo_path: str, git_url: str = None):
     vectorstore, metadata_list = load_or_create_index(
         retrievals,
         config.embedding_model,
-        config.vector_dir
+        config.vector_dir,
+        force_rebuild=force_rebuild
     )
     
     # 3. Module Summaries
@@ -158,7 +159,7 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
             
     # 2. Total Rebuild
     logger.info(f"Re-initializing project {project_name} completely...")
-    config, metadata_list, vectorstore = initialize_project(project_name, repo_path, git_url)
+    config, metadata_list, vectorstore = initialize_project(project_name, repo_path, git_url, force_rebuild=True)
     
     # 3. Generate Documentation directly into the repository
     logger.info(f"Generating updated documentation into the repository for {project_name}...")

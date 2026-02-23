@@ -39,6 +39,7 @@ def load_or_create_index(
     retrieval_units,
     embedding_model_name: str,
     store_path: str,
+    force_rebuild: bool = False
 ) -> tuple[FAISS, list]:
     """
     Load or create a FAISS vector store using LangChain.
@@ -57,7 +58,7 @@ def load_or_create_index(
     )
     
     # Try to load existing store
-    if store_path.exists() and (store_path / "index.faiss").exists():
+    if not force_rebuild and store_path.exists() and (store_path / "index.faiss").exists():
         try:
             print("Loading existing vector store")
             vectorstore = FAISS.load_local(
