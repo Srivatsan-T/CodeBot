@@ -34,7 +34,7 @@ if "config" not in st.session_state:
 if "active_project" not in st.session_state:
     st.session_state.active_project = None
 
-def initialize_system(project_name, repo_path, git_url=None):
+def initialize_system(project_name: str, repo_path: str, git_url: str = None):
     """Initialize the AI system with the given repository."""
     status_container = st.status(f"Initializing {project_name}...", expanded=True)
     

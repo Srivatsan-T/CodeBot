@@ -30,10 +30,13 @@ def load_projects() -> dict:
         return {}
 
 def save_project(name: str, path: str, git_url: str = None):
-    """Register a new project."""
+    """Save a new project to the registry."""
     projects = load_projects()
-    projects[name] = {"path": path, "git_url": git_url}
-    
+    projects[name] = {
+        "path": path,
+        "created_at": datetime.datetime.now().isoformat(),
+        "git_url": git_url
+    }
     projects_file = Path(__file__).parent / "artifacts/projects.json"
     projects_file.parent.mkdir(parents=True, exist_ok=True)
     
