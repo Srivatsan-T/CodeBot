@@ -49,7 +49,7 @@ def initialize_project(project_name: str, repo_path: str):
     # Register project
     save_project(project_name, repo_path)
     
-    return config, metadata_list
+    return config, metadata_list, vectorstore
 
 def generate_full_documentation(project_name: str, progress_callback=None, api_key: str = None):
     """
@@ -157,7 +157,7 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
             
     # 2. Total Rebuild
     logger.info(f"Re-initializing project {project_name} completely...")
-    config, metadata_list = initialize_project(project_name, repo_path)
+    config, metadata_list, vectorstore = initialize_project(project_name, repo_path)
     
     # 3. Generate Documentation directly into the repository
     logger.info(f"Generating updated documentation into the repository for {project_name}...")
@@ -225,7 +225,7 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
                 config.llm_config_path,
                 plan,
                 f"Generate comprehensive documentation for {module_name}",
-                None,  # Not used in our mock implementation
+                vectorstore,
                 metadata_list,
                 config.embedding_model,
                 config.docs_dir,
