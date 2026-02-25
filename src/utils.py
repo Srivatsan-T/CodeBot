@@ -33,6 +33,11 @@ def load_projects() -> dict:
 def save_project(name: str, path: str, git_url: str = None):
     """Save a new project to the registry."""
     projects = load_projects()
+    
+    # Preserve existing git_url if not provided
+    if git_url is None and name in projects:
+        git_url = projects[name].get("git_url")
+        
     projects[name] = {
         "path": path,
         "created_at": datetime.datetime.now().isoformat(),

@@ -215,45 +215,97 @@ with st.sidebar:
     # Load existing env vars as defaults
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    default_api_key = os.getenv("AWS_ACCESS_KEY_ID", "")
-    default_webhook_secret = os.getenv("WEBHOOK_SECRET", "")
     
+    # Load llm config
+    llm_cfg = {}
+    llm_config_path = Path(__file__).parent / "llm_config.json"
+    if llm_config_path.exists():
+        with open(llm_config_path, "r") as f:
+            llm_cfg = json.load(f)
+            
+    providers = list(llm_cfg.get("providers", {}).keys())
+    
+    # Determine currently active provider (assume they are all using the same for simplicity)
+    current_provider = "bedrock"
+    if "planner" in llm_cfg.get("active_models", {}):
+        agent_key = llm_cfg["active_models"]["planner"]
+        if agent_key in llm_cfg.get("agents", {}):
+            current_provider = llm_cfg["agents"][agent_key]["provider"]
+            
+    selected_provider = st.selectbox("🧠 Preferred LLM Provider", providers, index=providers.index(current_provider) if current_provider in providers else 0)
+    
+    if selected_provider != current_provider:
+        # Update active models
+        for agent_type in list(llm_cfg.get("active_models", {}).keys()):
+            # Construct the new agent config name (e.g. planner_bedrock)
+            new_agent_key = f"{agent_type}_{selected_provider}"
+            if new_agent_key in llm_cfg.get("agents", {}):
+                llm_cfg["active_models"][agent_type] = new_agent_key
+                
+        with open(llm_config_path, "w") as f:
+            json.dump(llm_cfg, f, indent=2)
+            
+        st.success(f"Switched to {selected_provider}!")
+        time.sleep(1)
+        st.rerun()
+        
     st.info("You must provide your credentials to use the application.")
     
-    api_key_input = st.text_input("🔑 Bedrock API Key", type="password", value=default_api_key, help="AWS Access Key ID for Bedrock")
+    provider_env_key = llm_cfg.get("providers", {}).get(selected_provider, {}).get("env_key")
+    default_api_key = os.getenv(provider_env_key, "") if provider_env_key else ""
+    default_webhook_secret = os.getenv("WEBHOOK_SECRET", "")
+    
+    if provider_env_key and selected_provider != "ollama":
+        api_key_input = st.text_input(f"🔑 {selected_provider.capitalize()} API Key", type="password", value=default_api_key, help=f"{provider_env_key}")
+    else:
+        api_key_input = "dummy_local_key"
+        
     webhook_secret_input = st.text_input("🛡️ Webhook Secret", type="password", value=default_webhook_secret, help="Global Secret used to authenticate GitHub Webhooks")
     
     if st.button("Save Credentials"):
-        if api_key_input:
-            # Save to .env so it persists across Streamlit reloads
+        if api_key_input and provider_env_key:
             import os
-            
             # Read all lines
             env_lines = []
             if os.path.exists(".env"):
                  with open(".env", "r") as f:
                       env_lines = f.readlines()
                       
-            # Write back
+            # Update or append
+            env_dict = {}
+            for line in env_lines:
+                if "=" in line and not line.strip().startswith("#"):
+                    k, v = line.strip().split("=", 1)
+                    env_dict[k] = v
+                    
+            if selected_provider != "ollama":
+                env_dict[provider_env_key] = api_key_input
+            if webhook_secret_input:
+                env_dict["WEBHOOK_SECRET"] = webhook_secret_input
+                
             with open(".env", "w") as f:
-                 f.write(f"AWS_ACCESS_KEY_ID={api_key_input}\n")
-                 if webhook_secret_input:
-                     f.write(f"WEBHOOK_SECRET={webhook_secret_input}\n")
+                 for k, v in env_dict.items():
+                     f.write(f"{k}={v}\n")
                          
             st.session_state.api_key = api_key_input
             if webhook_secret_input:
                 st.session_state.webhook_secret = webhook_secret_input
             st.success("Credentials saved securely!")
-            time.sleep(1)
+            time.sleep(0.5)
+            st.rerun()
+        elif selected_provider == "ollama":
+            st.session_state.api_key = api_key_input
+            st.success("Configuration saved!")
+            time.sleep(0.5)
             st.rerun()
         else:
-            st.error("API Key is required.")
+            st.error(f"{selected_provider.capitalize()} API Key is required.")
             
     st.divider()
     
     # Enforce Credentials before showing projects
-    if not api_key_input:
-        st.warning("👈 Please securely enter your Bedrock API Key in the sidebar to continue.")
+    if not api_key_input and selected_provider != "ollama":
+        st.warning(f"👈 Please securely enter your {selected_provider.capitalize()} API Key in the sidebar to continue.")
         st.stop()
         
     # Store in session state for current run
@@ -414,6 +466,13 @@ else:
     with tab_chat:
         st.markdown("### 💬 Chat with your Codebase")
         
+        st.info("""
+        **Welcome to CodeBot!** Here are some examples of what you can ask:
+        - ❓ **Q&A**: "How does the webhook server work?", "Where is the authentication logic?"
+        - 📄 **Documentation**: "Generate documentation for the `api` module", "Document the whole system"
+        - 🕸️ **Diagrams**: "Show me the architecture diagram for the `payment` flow", "Diagram the `auth` module dependencies"
+        """)
+        
         # Isolate messages for the active project
         active_proj = st.session_state.active_project
         if active_proj not in st.session_state.messages:
@@ -513,8 +572,8 @@ else:
         """)
         
         st.divider()
-        st.markdown("#### 📡 Webhook Server Logs")
-        st.write("Monitor incoming GitHub API pings and automatic documentation triggers.")
+        st.markdown("#### 📡 Server Logs")
+        st.write(f"Monitor incoming GitHub API pings and automatic documentation triggers for **{st.session_state.active_project}**.")
         
         col_log_1, col_log_2 = st.columns([5, 1])
         with col_log_1:
@@ -523,7 +582,7 @@ else:
              if st.button("🔄 Refresh Logs"):
                  st.rerun()
                  
-        log_file = Path(__file__).parent / "artifacts" / "logs" / "webhook.log"
+        log_file = Path(__file__).parent / "artifacts" / "logs" / f"{st.session_state.active_project}_webhook.log"
         if log_file.exists():
             with open(log_file, "r") as f:
                 # Read last 50 lines
@@ -534,4 +593,4 @@ else:
             else:
                 st.info("Log file is empty. Waiting for GitHub webhooks...")
         else:
-            st.info("Log file not found. Waiting for first Webhook API call...")
+            st.info("Log file not found. Waiting for first Webhook API call for this project...")

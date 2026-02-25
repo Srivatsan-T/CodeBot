@@ -33,6 +33,20 @@ ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
+def get_project_logger(project_name: str):
+    log_file = log_dir / f"{project_name}_webhook.log"
+    proj_logger = logging.getLogger(f"webhook_{project_name}")
+    if not proj_logger.handlers:
+        proj_logger.setLevel(logging.INFO)
+        fh = logging.FileHandler(log_file)
+        fh.setFormatter(formatter)
+        proj_logger.addHandler(fh)
+        
+        ch = logging.StreamHandler()
+        ch.setFormatter(formatter)
+        proj_logger.addHandler(ch)
+    return proj_logger
+
 from core.pipeline import incremental_update, initialize_project
 from utils import load_projects
 
@@ -64,13 +78,14 @@ def verify_signature(payload_body: bytes, secret_token: str, signature_header: s
 
 async def process_webhook_background(project_name: str, modified_files: List[str], removed_files: List[str] = None, full_rebuild: bool = False):
     """Background task to run the heavy analysis."""
-    logger.info(f"Starting analysis for {project_name}...")
+    proj_logger = get_project_logger(project_name)
+    proj_logger.info(f"Starting analysis for {project_name}...")
     removed_files = removed_files or []
     try:
         updated_docs = incremental_update(project_name, modified_files, removed_files, full_rebuild=full_rebuild)
-        logger.info(f"Completed analysis. Updated docs: {updated_docs}, Removed: {removed_files}")
+        proj_logger.info(f"Completed analysis. Updated docs: {updated_docs}, Removed: {removed_files}")
     except Exception as e:
-        logger.error(f"Error processing webhook: {e}")
+        proj_logger.error(f"Error processing webhook: {e}")
 
 @app.post("/webhook")
 async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
@@ -127,12 +142,14 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     if not matched_project:
         logger.warning(f"Could not match repository {repo_name} (URL: {repo_clone_url}) to a project.")
         return {"status": "ignored", "reason": "unknown repository"}
+        
+    proj_logger = get_project_logger(matched_project)
     
     # Determine event type
     github_event = request.headers.get("x-github-event", "push")
     
     if github_event == "ping":
-        logger.info(f"Received GitHub ping for {matched_project}. Triggering initial full analysis...")
+        proj_logger.info(f"Received GitHub ping for {matched_project}. Triggering initial full analysis...")
         # An empty file list tells incremental_update to rebuild docs for all modules
         background_tasks.add_task(process_webhook_background, matched_project, [], [], full_rebuild=True)
         return {"status": "accepted", "project": matched_project, "action": "initial_ping_analysis"}
@@ -150,23 +167,23 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
             message = commit.get("message", "")
             if message.startswith("[CodeBot]"):
                 codebot_commit = True
-                logger.info(f"Ignoring auto-generated CodeBot commit: {message}")
-                continue # Skip processing files from our own commits
+                proj_logger.info(f"Ignoring auto-generated CodeBot commit: {message}") # skip bots
+                continue
                 
             modified_files.update(commit.get("added", []))
             modified_files.update(commit.get("modified", []))
             removed_files.update(commit.get("removed", []))
             
     if codebot_commit and not modified_files and not removed_files:
-         logger.info("Ignoring push payload entirely (only CodeBot commits found).")
+         proj_logger.info("Ignoring push payload entirely (only CodeBot commits found).")
          return {"status": "ignored", "reason": "auto-generated bot commit"}
             
     if not modified_files and not removed_files:
-         logger.info("Ignoring push payload (no modified files or removed files).")
+         proj_logger.info("Ignoring push payload (no modified files or removed files).")
          return {"status": "ignored", "reason": "no file changes"}
 
     # Run analysis in background
-    logger.info(f"Accepted webhook for {matched_project}. Modified: {list(modified_files)}, Removed: {list(removed_files)}")
+    proj_logger.info(f"Accepted webhook for {matched_project}. Modified: {list(modified_files)}, Removed: {list(removed_files)}")
     background_tasks.add_task(process_webhook_background, matched_project, list(modified_files), list(removed_files))
     
     return {"status": "accepted", "project": matched_project, "files": list(modified_files), "removed": list(removed_files)}
