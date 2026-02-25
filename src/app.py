@@ -11,7 +11,7 @@ from agents import (
 )
 from core.embedding import load_or_create_index
 from core.parser import parse_repository
-from arch import graph, module_subgraph, symbol_subgraph
+from arch import graph, module_subgraph
 import json
 
 
