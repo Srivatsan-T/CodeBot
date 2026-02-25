@@ -3,6 +3,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+    image: codebot-app
     container_name: codebot-ui
     command: python -m streamlit run src/app.py --server.port 8501 --server.address 0.0.0.0
     ports:
@@ -24,9 +25,9 @@ services:
     restart: unless-stopped
 
   webhook:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: codebot-app
+    depends_on:
+      - ui
     container_name: codebot-webhook
     command: python src/webhook_server.py
     ports:
