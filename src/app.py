@@ -119,29 +119,8 @@ def process_query(query):
 
     if plan.intent == "diagram":
         with st.spinner("Generating Architecture Diagram..."):
-            if plan.scope == "symbol":
-                # Function-level flow
-                selected = symbol_selector_agent(
-                    config.llm_config_path,
-                    query,
-                    st.session_state.vectorstore,
-                    st.session_state.metadata,
-                    config.embedding_model,
-                    api_key=api_key
-                )
-                
-                symbol_subgraph(
-                    st.session_state.symbol_graph,
-                    selected['selected_symbols'],
-                    selected['flow_path'],
-                    config.subgraph_dot,
-                    st.session_state.metadata
-                )
-                response["content"] = f"Generated **function-level** flow diagram based on your request.\n\n**Flow Type:** {selected['flow_type']}\n**Steps:** {len(selected['flow_path'])}"
-                response["artifacts"].append({"type": "graphviz", "path": config.subgraph_dot})
-                
-            elif plan.scope == "module":
-                # Module-level flow
+            if plan.scope in ["symbol", "module"]:
+                # Module-level flow (Symbol level diagrams removed)
                 selected_modules = module_selector_agent(
                     config.llm_config_path,
                     query,
@@ -154,9 +133,10 @@ def process_query(query):
                     st.session_state.module_graph,
                     st.session_state.module_summaries,
                     selected_modules,
-                    config.subgraph_dot
+                    config.subgraph_dot,
+                    st.session_state.metadata
                 )
-                response["content"] = f"Generated **module-level** architecture diagram involving {len(selected_modules['selected_modules'])} modules."
+                response["content"] = f"Generated **module-level** architecture diagram involving {len(selected_modules.get('selected_modules', []))} modules."
                 response["artifacts"].append({"type": "graphviz", "path": config.subgraph_dot})
                 
             else: # System scope

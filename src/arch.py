@@ -137,13 +137,28 @@ def graph(metadata: List[Dict], output_dot: str) -> Tuple[nx.DiGraph, nx.DiGraph
     export_to_dot(module_graph, Path(output_dot), cluster=True)
     return module_graph, module_graph
 
-def module_subgraph(graph: nx.DiGraph, module_summaries, selected_module_ids: dict, output_dot) -> nx.DiGraph:
-    selected_paths = selected_module_ids.get('selected_modules', [])
+def module_subgraph(graph: nx.DiGraph, module_summaries: dict, selected_module_ids: dict, output_dot: str, metadata: list) -> nx.DiGraph:
+    selected_uids = selected_module_ids.get('selected_modules', [])
+    if not selected_uids:
+        return nx.DiGraph()
+        
+    # the LLM returns UIDs like 'src.app' but the graph nodes are file paths like 'src/app.py'
+    # we need to map uids back to file paths
+    uid_to_path = {}
+    for symbol in metadata:
+        if symbol.get("symbol_type") == "module" and "uid" in symbol and "file_path" in symbol:
+            uid_to_path[symbol["uid"]] = symbol["file_path"]
+            
+    selected_paths = []
+    for uid in selected_uids:
+        if uid in uid_to_path:
+            selected_paths.append(uid_to_path[uid])
+            
+    # Include nodes that might be missing from the direct paths if they are dependencies
+    # But for a strict subgraph, we just use the selected paths
     if not selected_paths:
         return nx.DiGraph()
+        
     subgraph = graph.subgraph(selected_paths).copy()
     export_to_dot(subgraph, Path(output_dot), cluster=True)
     return subgraph
-
-def symbol_subgraph(symbol_graph: nx.DiGraph, selected_symbols: list, flow_path: list, output_dot: str, metadata: list) -> nx.DiGraph:
-    return nx.DiGraph()
