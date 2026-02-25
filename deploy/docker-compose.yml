@@ -15,11 +15,10 @@ services:
       - ../.env:/app/.env
       - ../cloned_repos:/app/cloned_repos
       - ../uploaded_repos:/app/uploaded_repos
+    env_file:
+      - ../.env
     environment:
       - PYTHONUNBUFFERED=1
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -39,11 +38,10 @@ services:
       - ../.env:/app/.env
       - ../cloned_repos:/app/cloned_repos
       - ../uploaded_repos:/app/uploaded_repos
+    env_file:
+      - ../.env
     environment:
       - PYTHONUNBUFFERED=1
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
