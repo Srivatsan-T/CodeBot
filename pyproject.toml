@@ -21,4 +21,5 @@ dependencies = [
     "streamlit>=1.54.0",
     "fastapi",
     "uvicorn",
+    "boto3",
 ]

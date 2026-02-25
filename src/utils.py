@@ -48,6 +48,12 @@ def save_project(name: str, path: str, git_url: str = None):
     
     with open(projects_file, "w") as f:
         json.dump(projects, f, indent=2)
+        
+    try:
+        from s3_sync import upload_artifacts_to_s3
+        upload_artifacts_to_s3()
+    except ImportError:
+        pass
 
 def delete_project(name: str):
     """Delete a project from the registry and clean up its files."""
@@ -74,6 +80,12 @@ def delete_project(name: str):
         # Avoid deleting the base clone/upload dir, just the project dir
         if repo_path.exists() and repo_path.is_dir():
              shutil.rmtree(repo_path, ignore_errors=True)
+             
+    try:
+        from s3_sync import upload_artifacts_to_s3
+        upload_artifacts_to_s3()
+    except ImportError:
+        pass
 
 def get_config_for_project(project_name: str) -> Config:
     """Create a Config instance for a specific project."""

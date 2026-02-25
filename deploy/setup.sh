@@ -39,4 +39,23 @@ if [ ! -f /swapfile ]; then
     echo "/swapfile swap swap defaults 0 0" | sudo tee -a /etc/fstab
 fi
 
+# 7. Setup AWS Credentials
+echo ""
+echo "=== AWS S3 Setup ==="
+read -p "Enter AWS Access Key ID (or press enter to skip): " aws_id
+if [ ! -z "$aws_id" ]; then
+    read -p "Enter AWS Secret Access Key: " aws_secret
+    read -p "Enter Target S3 Bucket Name: " aws_bucket
+    
+    # Save to the .env file in the deployment directory
+    cd "$(dirname "$0")/.."
+    echo "AWS_ACCESS_KEY_ID=$aws_id" >> .env
+    echo "AWS_SECRET_ACCESS_KEY=$aws_secret" >> .env
+    echo "AWS_S3_BUCKET_NAME=$aws_bucket" >> .env
+    
+    echo "AWS Credentials saved to .env file."
+else
+    echo "Skipping AWS S3 setup."
+fi
+
 echo "Setup complete! Please logout and log back in to apply group changes."

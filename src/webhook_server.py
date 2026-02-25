@@ -84,6 +84,16 @@ async def process_webhook_background(project_name: str, modified_files: List[str
     try:
         updated_docs = incremental_update(project_name, modified_files, removed_files, full_rebuild=full_rebuild)
         proj_logger.info(f"Completed analysis. Updated docs: {updated_docs}, Removed: {removed_files}")
+        
+        # Publish artifacts to S3 after updating
+        try:
+            from s3_sync import upload_artifacts_to_s3
+            proj_logger.info("Synchronizing artifacts to S3...")
+            upload_artifacts_to_s3()
+            proj_logger.info("S3 Synchronization complete.")
+        except ImportError:
+            proj_logger.warning("s3_sync module not found. Skipping S3 upload.")
+            
     except Exception as e:
         proj_logger.error(f"Error processing webhook: {e}")
 

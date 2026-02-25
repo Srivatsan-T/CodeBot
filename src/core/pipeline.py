@@ -50,6 +50,14 @@ def initialize_project(project_name: str, repo_path: str, git_url: str = None, f
     # Register project
     save_project(project_name, repo_path, git_url)
     
+    # Sync artifacts with S3
+    try:
+        from s3_sync import upload_artifacts_to_s3
+        logger.info("Synchronizing initial project artifacts to S3...")
+        upload_artifacts_to_s3()
+    except ImportError:
+        logger.warning("s3_sync module not found. Skipping S3 upload.")
+    
     return config, metadata_list, vectorstore
 
 def generate_full_documentation(project_name: str, progress_callback=None, api_key: str = None):

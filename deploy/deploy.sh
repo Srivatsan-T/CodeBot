@@ -13,7 +13,9 @@ git pull
 
 # 2. Build and start containers
 # Ensure an empty .env file exists so docker doesn't mount it as a directory
-touch .env
+if [ ! -f .env ]; then
+    touch .env
+fi
 # --build: Build images before starting containers.
 # -d: Detached mode: Run containers in the background
 # -f: Specify the location of the docker-compose file

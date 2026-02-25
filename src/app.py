@@ -26,6 +26,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+@st.cache_resource
+def initial_s3_sync():
+    """Sync artifacts down from S3 exactly once on server startup."""
+    try:
+        from s3_sync import download_artifacts_from_s3
+        download_artifacts_from_s3()
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"S3 init sync failed: {e}")
+    return True
+
+# Trigger Sync
+initial_s3_sync()
+
 # Initialize Session State
 if "messages" not in st.session_state:
     st.session_state.messages = {}  # Dict mapping project_name -> list of messages
