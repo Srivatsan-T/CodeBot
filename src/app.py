@@ -177,6 +177,7 @@ def process_query(query):
             else:
                 # Targeted documentation
                 doc_path = config.docs_dir
+                safe_query_name = "".join(c if c.isalnum() else "_" for c in query.lower()[:20])
                 doc = documentation_agent(
                     config.llm_config_path,
                     plan,
@@ -185,6 +186,7 @@ def process_query(query):
                     st.session_state.metadata,
                     config.embedding_model,
                     doc_path,
+                    module_name=f"generated_{safe_query_name}_{int(time.time())}",
                     api_key=api_key
                 )
                 response["content"] = doc

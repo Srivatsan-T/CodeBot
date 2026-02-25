@@ -5,7 +5,7 @@
       "env_key": "GEMINI_API_KEY"
     },
     "ollama": {
-      "base_url": "http://localhost:11434/v1",
+      "base_url": "http://host.docker.internal:11434/v1",
       "env_key": "OLLAMA_KEY"
     },
     "bedrock": {
