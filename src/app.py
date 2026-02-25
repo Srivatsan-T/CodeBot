@@ -452,7 +452,6 @@ else:
         **Welcome to CodeBot!** Here are some examples of what you can ask:
         - ❓ **Q&A**: "How does the webhook server work?", "Where is the authentication logic?"
         - 📄 **Documentation**: "Generate documentation for the `api` module", "Document the whole system"
-        - 🕸️ **Diagrams**: "Show me the architecture diagram for the `payment` flow", "Diagram the `auth` module dependencies"
         """)
         
         # Isolate messages for the active project
