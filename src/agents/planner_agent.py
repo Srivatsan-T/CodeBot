@@ -60,7 +60,7 @@ def planner_agent(llm_config_path: str, query: str, api_key: str = None) -> Plan
     parser = PydanticOutputParser(pydantic_object=PlannerOutput)
     
     # Get system prompt from config
-    system_prompt = config["agents"]["planner_bedrock"]["system_prompt"]
+    system_prompt = config["agents"][config["active_models"]["planner"]]["system_prompt"]
     
     # Create prompt template
     prompt = ChatPromptTemplate.from_messages([
