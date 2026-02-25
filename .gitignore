@@ -13,3 +13,7 @@ wheels/
 .env
 src/.env
 
+# Artifacts & Repositories
+src/artifacts/
+cloned_repos/
+uploaded_repos/
