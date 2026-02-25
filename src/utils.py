@@ -137,10 +137,8 @@ def create_llm_from_config(config: dict, agent_config_name: str, api_key: str = 
         api_key = os.getenv(provider_cfg["env_key"])
     
     # Provider-specific logic
-    if provider_name == "ollama":
-        if not api_key: api_key = "ollama" # Dummy key
-    elif provider_name == "bedrock":
-        if not api_key: raise ValueError(f"Missing API Key for Bedrock. Please enter it in the UI or set {provider_cfg['env_key']}.")
+    if provider_name == "openai":
+        if not api_key: raise ValueError(f"Missing API Key for OpenAI. Please enter it in the UI or set {provider_cfg['env_key']}.")
     elif provider_name == "gemini":
         if not api_key: raise ValueError(f"Missing API Key for Gemini. Please enter it in the UI or set {provider_cfg['env_key']}.")
     

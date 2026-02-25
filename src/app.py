@@ -228,7 +228,7 @@ with st.sidebar:
     providers = list(llm_cfg.get("providers", {}).keys())
     
     # Determine currently active provider (assume they are all using the same for simplicity)
-    current_provider = "bedrock"
+    current_provider = "openai"
     if "planner" in llm_cfg.get("active_models", {}):
         agent_key = llm_cfg["active_models"]["planner"]
         if agent_key in llm_cfg.get("agents", {}):
