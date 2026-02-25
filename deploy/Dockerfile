@@ -26,7 +26,7 @@ COPY pyproject.toml .
 # Install dependencies using uv
 # --system flag installs into the system python environment (no venv needed in docker)
 # We specify the PyTorch CPU index to avoid downloading massive CUDA packages that exhaust EC2 disk space
-RUN uv pip install --system --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match -r pyproject.toml
+RUN uv pip install --system --no-cache --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match -r pyproject.toml
 
 # Copy the rest of the application
 COPY src/ src/
