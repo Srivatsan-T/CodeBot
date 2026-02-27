@@ -82,7 +82,9 @@ def delete_project(name: str):
              shutil.rmtree(repo_path, ignore_errors=True)
              
     try:
-        from s3_sync import upload_artifacts_to_s3
+        from s3_sync import upload_artifacts_to_s3, delete_artifacts_from_s3
+        delete_artifacts_from_s3(name)
+        # We still sync upward to save the updated projects.json
         upload_artifacts_to_s3()
     except ImportError:
         pass

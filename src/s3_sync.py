@@ -75,3 +75,38 @@ def download_artifacts_from_s3():
                 
     except ClientError as e:
          print(f"  Error downloading from S3: {e}")
+
+def delete_artifacts_from_s3(project_name: str):
+    """Delete all artifacts for a specific project from the S3 bucket."""
+    s3, bucket_name = get_s3_client()
+    if not s3 or not bucket_name:
+        print("S3 Deletion skipped: AWS_S3_BUCKET_NAME not configured.")
+        return
+        
+    prefix = f"artifacts/{project_name}/"
+    print(f"Deleting artifacts from s3://{bucket_name}/{prefix}")
+    
+    try:
+        paginator = s3.get_paginator("list_objects_v2")
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+        
+        objects_to_delete = []
+        for page in pages:
+            if "Contents" in page:
+                for obj in page["Contents"]:
+                    objects_to_delete.append({"Key": obj["Key"]})
+                    
+        if objects_to_delete:
+            # S3 delete_objects can handle up to 1000 keys per request
+            for i in range(0, len(objects_to_delete), 1000):
+                batch = objects_to_delete[i:i + 1000]
+                s3.delete_objects(
+                    Bucket=bucket_name,
+                    Delete={"Objects": batch}
+                )
+            print(f"  Deleted {len(objects_to_delete)} objects from S3.")
+        else:
+            print(f"  No objects found to delete for prefix: {prefix}")
+            
+    except ClientError as e:
+        print(f"  Error deleting from S3: {e}")
