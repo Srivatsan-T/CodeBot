@@ -225,11 +225,6 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
         )
         
         try:
-            import os
-            from dotenv import load_dotenv
-            load_dotenv(override=True)
-            webhook_api_key = os.getenv("AWS_ACCESS_KEY_ID")
-
             # We must pass the correct docs_dir to the agent
             documentation_agent(
                 config.llm_config_path,
@@ -240,7 +235,7 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
                 config.embedding_model,
                 config.docs_dir,
                 module_name=module_name,
-                api_key=webhook_api_key
+                api_key=None
             )
             docs_generated.append(module_name)
         except Exception as e:
@@ -251,17 +246,13 @@ def incremental_update(project_name: str, modified_files: List[str] = None, remo
     try:
         from core.embedding import load_or_create_index
         from agents import load_or_build_module_summaries, generate_codebase_overview
-        import os
-        from dotenv import load_dotenv
-        load_dotenv(override=True)
-        webhook_api_key = os.getenv("AWS_ACCESS_KEY_ID")
         
         # Load module summaries to write the overview
         module_summaries = load_or_build_module_summaries(
             config.llm_config_path,
             metadata_list,
             config.module_summary_path,
-            api_key=webhook_api_key
+            api_key=None
         )
         
         overview_text = generate_codebase_overview(

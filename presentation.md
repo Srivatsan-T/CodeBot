@@ -13,9 +13,10 @@ title: CodeBot - AI-Powered Codebase Intelligence
 ---
 
 # 🤖 CodeBot
-### AI-Powered Codebase Intelligence
 
-**Simplifying Documentation and Understanding of Complex Codebases**
+# 🤔 What is CodeBot?
+
+**CodeBot** is an agentic AI assistant and service designed to let you talk directly to your codebase and fully automate the generation and maintenance of Context-Aware documentation.
 
 ---
 
